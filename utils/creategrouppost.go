@@ -3,6 +3,7 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -32,15 +33,7 @@ type InputVariables struct {
 		InlineActivities   []interface{} `json:"inline_activities"`
 		TextFormatPresetID string        `json:"text_format_preset_id"`
 		Attachments        []interface{} `json:"attachments"` // Use interface{} for now
-		ComposedText       struct {
-			BlockData    []string `json:"block_data"`
-			BlockDepths  []int    `json:"block_depths"`
-			BlockTypes   []int    `json:"block_types"`
-			Blocks       []string `json:"blocks"`
-			Entities     []string `json:"entities"`
-			EntityMap    string   `json:"entity_map"`
-			InlineStyles []string `json:"inline_styles"`
-		} `json:"composed_text"`
+
 		NavigationData struct {
 			AttributionIDV2 string `json:"attribution_id_v2"`
 		} `json:"navigation_data"`
@@ -121,15 +114,7 @@ func CreateGroupPost(post FacebookPost) (FacebookPost, error) {
 			InlineActivities   []interface{} `json:"inline_activities"`
 			TextFormatPresetID string        `json:"text_format_preset_id"`
 			Attachments        []interface{} `json:"attachments"` // Use interface{} for now
-			ComposedText       struct {
-				BlockData    []string `json:"block_data"`
-				BlockDepths  []int    `json:"block_depths"`
-				BlockTypes   []int    `json:"block_types"`
-				Blocks       []string `json:"blocks"`
-				Entities     []string `json:"entities"`
-				EntityMap    string   `json:"entity_map"`
-				InlineStyles []string `json:"inline_styles"`
-			} `json:"composed_text"`
+
 			NavigationData struct {
 				AttributionIDV2 string `json:"attribution_id_v2"`
 			} `json:"navigation_data"`
@@ -143,13 +128,13 @@ func CreateGroupPost(post FacebookPost) (FacebookPost, error) {
 			ActorID          string `json:"actor_id"`
 			ClientMutationID string `json:"client_mutation_id"`
 		}{
-			ComposerEntryPoint:    "hosted_inline_composer",
+			ComposerEntryPoint:    "inline_composer",
 			ComposerSourceSurface: "group",
 			ComposerType:          "group",
 			Logging: struct {
 				ComposerSessionID string `json:"composer_session_id"`
 			}{
-				ComposerSessionID: "4665e32c-1aa1-43bb-8309-b6f2b1be223a",
+				ComposerSessionID: "14f915c8-de15-4d07-bf0c-a1971c52b41a",
 			},
 			Source: "WWW",
 			Message: struct {
@@ -163,27 +148,10 @@ func CreateGroupPost(post FacebookPost) (FacebookPost, error) {
 			InlineActivities:   []interface{}{},
 			TextFormatPresetID: "0",
 			Attachments:        []interface{}{}, // Handle attachments later
-			ComposedText: struct {
-				BlockData    []string `json:"block_data"`
-				BlockDepths  []int    `json:"block_depths"`
-				BlockTypes   []int    `json:"block_types"`
-				Blocks       []string `json:"blocks"`
-				Entities     []string `json:"entities"`
-				EntityMap    string   `json:"entity_map"`
-				InlineStyles []string `json:"inline_styles"`
-			}{
-				BlockData:    []string{"{}"},
-				BlockDepths:  []int{0},
-				BlockTypes:   []int{0},
-				Blocks:       []string{post.MessageText},
-				Entities:     []string{"[]"},
-				EntityMap:    "{}",
-				InlineStyles: []string{"[]"},
-			},
 			NavigationData: struct {
 				AttributionIDV2 string `json:"attribution_id_v2"`
 			}{
-				AttributionIDV2: "CometGroupDiscussionRoot.react,comet.group,unexpected,1753865409319,736839,2361831622,,;GroupsCometJoinsRoot.react,comet.groups.joins,unexpected,1753865393835,296351,,,,;GroupsCometCrossGroupFeedRoot.react,comet.groups.feed,tap_bookmark,1753865391472,591435,2361831622,,",
+				AttributionIDV2: "CometGroupDiscussionRoot.react,comet.group,via_cold_start,1753963901694,240833,2361831622,,",
 			},
 			Tracking: []interface{}{nil},
 			EventShareMetadata: struct {
@@ -196,8 +164,8 @@ func CreateGroupPost(post FacebookPost) (FacebookPost, error) {
 			}{
 				ToID: post.GroupID,
 			},
-			ActorID:          "61560452168137",
-			ClientMutationID: "3",
+			ActorID:          "61555590462485",
+			ClientMutationID: "1",
 		},
 		FeedLocation:                        "GROUP",
 		FeedbackSource:                      0,
@@ -259,8 +227,8 @@ func CreateGroupPost(post FacebookPost) (FacebookPost, error) {
 	}
 	// Use proper URL encoding
 	encodedVariables := url.QueryEscape(string(variablesJSON))
-	// Create the request body with dynamic data
-	requestBody := fmt.Sprintf("av=61560452168137&__aaid=0&__user=61560452168137&__a=1&__req=6g&__hs=20299.HYP%%3Acomet_pkg.2.1...0&dpr=1&__ccg=MODERATE&__rev=1025302125&__s=9n5i35%%3Awrk89z%%3As2qa8l&__hsi=7532786109695679640&__dyn=7xeUjGU5a5Q1ryaxG4Vp41twWwIxu13wFwhUngS3q2ibwNw9G2Saw8i2S1DwUx60GE3Qwb-q7oc81EEc87m221Fwgo9oO0-E4a3a4oaEnxO0Bo7O2l2Utwqo31wiE4u9x-3m1mzXw8W58jwGzEaE5e3ym2SU4i5oe8464-5pU9UmwUwxwjFovUaU3VwLyEbUGdG0HE88cA0z8c84q58jyUaUbGxe6Uak0zU8oC1hxB0qo4e4UO2m3G1eKnzUiBG2OUqwjVqwLwHwa211zU520XEaUcGy8qxG&__csr=g4N3c6cfND9q69NQri4NYp8DfkdNi1148rESyROidTh4ycDFsAhbkTpdnayl9mDvnKgynltAbnOr54Ltp5W8FsDQGWRQBGhrmDSOnbm8JAaCiF5h9vvpOQqqHyFkQCJk8auKlRGAuhCRmRzqgB-qJPibHGQEHy4F4QC8SGhaF6FkEzoxuVvXKQjvKiaVt6ADy25WQiF9HAQl4ZDKFrSfmiaoyhp9bhtd2oSqiiq8qXGbhXA-mhoKFXWWyuaXmnDgW49FHiF3FJel1KqAu9KiV8gjV9VExbrjRx24Ah2FoHB-Vl_xaAHVFuUZemhXzlACyrCiXJ5zUOiUSrxiEO4AETGjzGxiaUWcy8lz98j-UCcGFULCGjCBBzUoyUlK7WBjAwEAKufDDyrzF9qzAFHBy9UKnx3zrxW3q4bAwLAUjyUSEO9AyQ6k3y6oOcDgiAxeu58F7wHGHxa5UK64m2G5oc8pAwDAwgUGA2BrglDyHyEG1tFe2y3m8wxwvK1lwCzEowIzXw9jC-K15zUuwyw8WJabLjxe3zxK6A7pkcwUgdFo8UG4U4y7p88Elwc62G356gkwK-2LwBwvk6eu6o4Cum5U7W7oSfwNzd0GG0A84a0A85q2K6EnGu5p8O2S0bww9Aw1o80pgwgE0lNwgE10E5S1zyoF3o0uixNe06p81U82kxK5U0S20E9Q1hw0rEA0jG02aC03RS0g-0EUe12qxy3mfwfR0Rw2AQ0C62O1xwGwfWzOd0lrxS1wxy0dLo1gEzga82xwaG0hW480gNg4mE0Arc04eE4q0m60qsMvg0GKoB0rU1580Yu5EO0_Q04jEboaU6alw5hw1LOC0dlwxwn21O3S4EO4E0QK5VS5-1nw3Hy5yo7-1vwlQ08Zw8210w2YU3Ww2u8C9w13O48bHa1Agyzwp-S0ZEy9may85Z0Xg3vwhUlwtjilJ0srw2pE0Z2&__hsdp=g494448gykAzA1CAx9xIuxa1J1ix2P8oy41MFCkBc-AxOP8W9B44cgiNVaIy2a6diGOaxH1kOT8yQwai8Ib8dE44riD8AQwpOONiAyTQB7skNyj2aPEvRN9q8GAcMygy68YWEJcqOKPaTqiJDAjyqeiy8X4EG6KWc8gw85aKzBDF4yYrCowyjFFcCWzi5Ragl422BAzoN4N4CjzSn8yJml27Y9sNrAhiitazDKasD6miDAxhbQy5dbjp2A99re9O58TIAclHeAS8AFGbhrz6Cz5AvrFauO4iihoN3FSFF2W6sxtinDtGc8p4G9ze64ExkoMTh4dr88Kq8ghKsHy8nyFAiu-hyioFUiDJoXFy8zqy9yep7KiQi3a7z3lhamhe6YWhxsIR125kyVqy8EyLECgJ24S44EOhDwkEVklBgR2S2eVKuiah8Gu9mezp49cwOdG2-bFeQpxO4Aeanzk3d0GwkagtgdVEggW3ZVUiwp8hKaxp0sUy3Fhw7C20MaoF1G2O5F4YmUS5rJ6KCQ8yEK2i7UtwMBzQ5kim3t1m6AeG68dbpkhzA8C5cs1NyFUy1cx-eybgc8G8zo63Fxu8yWx2dJ1R0kE5oxE57Dw5wU2jwFg72446U8o5u5E4wg1FwpUuyo1rUbo1gU2Xwa-26E1ao4K0C85K12gC0mW6E1Bo5e2-3u2e26bwTwvU5O0BEowd-5ovxS2-78hw5swIG0xE2Zwci2y0gS0qS6o4W0A84y1cwaK12wo8C0oi4oGEjwcS3W0WU1eo724o3ow2ao17U&__sjsp=g494448gykAzA1CAx9xIuxa1J1ix2P8oy47NV2l6ymkChiqi7b8hSQFlagNcX6kiH8wwR98Qy68lEBDfNBfaoJHLyialrgiox2pQyrWTxC8BjGii7pda9gJ1W8LQ6p8Oh164Ey6aYGhoznoXxijCCm5lmmiQZEPasNDjKSuieEVO8X4EHqFrKz24821iHEVoGmbEo8oBdeCAOrGeptiA4sg8aaxF4yQFe6mh168povKh5n9QGeuUJqZ2SiDxBbQy5diQSkx2imgMDpydX8yQ44p7joyiCehrz4it5BmAqf8h99193EyaAh8-inkBVQCEnAG9ze64EyAsEThoVcwyVEx16VOwAyFAibV6ezEizEjoy8-EyozDyUx4wkj117mii6YWhxsGa4UlibBG56Frujt2944Eko6CFCqdgN0zKq9AyV8G4lzEtcsa3ocEKAXgy2Z3JDzk3e2K1gF1W3W1Iw8S0DUeB60uo2zxqhf5wLgGCUkwk8twSwCBwZg4e1hosgyokNM760F40IVk04gU1IEuyo1Do1gU2Xwd6E1ao1g804J2aG4U0qUw&__comet_req=15&fb_dtsg=NAftSKSWhPgbN1VZDx3QB3kYbkfockXiJv5syWOVfkruSHXYikFe6cw%%3A8%%3A1735880128&jazoest=25682&lsd=7yjkTI33tHoY5_gr2ktfw_&__spin_r=1025302125&__spin_b=trunk&__spin_t=1753877982&__crn=comet.fbweb.CometGroupDiscussionRoute&fb_api_caller_class=RelayModern&fb_api_req_friendly_name=ComposerStoryCreateMutation&variables=%s&server_timestamps=true&doc_id=24343131148645455", encodedVariables)
+
+	requestBody := fmt.Sprintf("av=61555590462485&__aaid=0&__user=61555590462485&__a=1&__req=2h&__hs=20300.HYP%%3Acomet_pkg.2.1...0&dpr=1&__ccg=MODERATE&__rev=1025357550&__s=9diw46%%3Afbxq0i%%3A3qq4wm&__hsi=7533217585352648528&__dyn=7xeUjGU5a5Q1ryaxG4Vp41twWwIxu13wFwhUngS3q2ibwNw9G2Saw8i2S1DwUx60GE5O0BU2_CxS320qa321Rwwwqo462mcwfG12wOx62G5Usw9m1YwBgK7o6C0Mo4G17yovwRwlE-U2exi4UaEW2G1jwUBwJK14xm3y11xfxmu2u5Ee88o4Wm7-2K0-obUG2-azqwaW223908O3216xi4UK2K2WEjxK2B08-269wkopg6C13xecwBwWwjHBU-4FqwIK6E4-mEbUaU2wwgo-1gweW2K3aEy6Eqw&__csr=gaI7QagXkj2Jh5hQ4Yh3_NWf5JW6q6PHbbYriPN2tPT5Fiq9iZH8CDQCT4FZp7NivQCN7cWIGl4mDvAV9eAO9kQKECDh94KkCmJXBZ5A-CnZ2Bi4aLGV5h-rjheF4Ah68HyVWy9uLBgx4ASmQKWnOayXAGi4ebheWgRdq-jzejGQFXXCGqbDAgnF2FEK8iyXKmheKqfVEW8UyeURu9GuUmACyoOS8y8mKBDCx6QQlpGFG2au9xiEiKVV8uy-iRxq6oCezEFrKVoKF8kxO9G68y6ooiAzooGUK9J2-74Eom6pppQ498G4V42-qicQ8Gm9Uy4Fd12uj-qqdwzhU9EW58gmfxqq8xq6oybwRz8mxmm48hzqyk8AyUiBxe9wPzVU-8xC2Gh4xJ2UpXxi2acxOi3Oq14BwxxS8xu5odoG6UK4Uym8AwExa4EvCCyopyUhx-EdUnwq82fyOa0HA0g21jg4S1ywbu3C0zo28oBw8SeByo4N3WyAQU6Z5wn8zwa61qy85B05Sl9dedBU5O16RgB0g8BK2J0XwWAo5-3101h4yw5yw0CJw1QV6m7o0kkw2fk3Oez87-0ky09Jw11q04w8dU569U02dHg0cxA0j-E0p2Pxy76UqyVU2-xO0re06U8fpA0t-toao0xK0A43q0rS08uo0T-2-0Vo5K1Lw8CkK4k1iw1du04ok0qi0i1eXh4bOU0bF84m5onU3EwcG328w_81DwgQ1Pg0LG9gKt08a3C2O13w2lE8-7U3jw2EA0e1wmU3_w7xwso30waK1aweW0PEgweC6U2vy80zKiA0tS1Rya8upWw7PghZi4ngco3fwae3e9a46dwzU&__hsdp=g4fq4FEF28iGA4E42ax1123sygwa8ilEO1sWfE4yEO7bmshji5Gy9N5EslmJ8xaf5FAjPH69_T9p4AOh29ux4z8B88aAtTe9FGC52sGMi8j9n5ihcuzcdhvewogx4A22NcmHEO2z922ax4qCNAjh7Mwl8j4hjREy4leKBgMIxi94yUOHh6msxKyJNYFA8i4qz-9By9ohKGyykAy9hOSqUyy6kFzyi9HVaH9XJQSKwzFEg8ybqqiimeazIKSqQSBBoJhz8Qb8vhk9qOAbl25yYWCgxy-IBNN2CujykgyoCmhAiajh8AxEI9yoC9yV4gEVzQhGhEpcpy4Wqya-OUOl4x2fhQ4EsJoC58kgoxeWXcn8bKUgyQagN1LiooBwwpA957B8tzkA4ocbyy2pozQ4O6Ji8yB4h9OHhyBGuu8VFFp4ihaiulF5xcxFFU4PmodzE9ongcteh4c9gZd0Qxi3GHAz8qgoyQ3ydoOfweOargkBgixS1oxy1ww5Xx6Er2wCUjAgsgQwx3A4UR3hMbie749wQzE88fU6124i259wJU8C9wiq3gy1syEdU8pEqxe2219x2dwu8owA8U98f87a0BUlxa0H8vwTwrUiAxyi0NGwJ86oV38vxy1OGyxiazE4m0iW0mC08rwemew2JUC1Hwjo4C23w8Cq0pu0BU6C0W834wwwl81H82Pwe20z832w2Gotwm833wh85K0m2bw2yE3Vwr83Vw5Lw9i18w&__hblp=08CqQbwoE9UkoowgUaUqwEwXyEbE138gwvo3Axi2CdwXCwXUcKdmUeEK0xEyicyoa8aUtzUbEkzoPyouyoSry8hwUG1xwXwxwYwm8vUnx2czp84e7E5O3SbxnGegpG4EcbwiocFVUdob4Q2eewmbWQm0x-9xiUhwiEfoycw44ig5K5E98cUnwjo5qu2J0Ew8O1Gwnoc8owoWK5omwgo9Ud86-362uq9wEFx91C321KwlpE62axG0RF85m0w87a0EEC7E7K2e2O0FoogeomxW1NQbx-26ezopxW1RwlWwww8210wwwiU9E521owzww81gxm4otwVwmUhw821kwlU5C1exG26ewso3Ox-mfw8e1OwLwMwWwiGxKdAxGaxnxW8wopGwSyo2SmUtzU6vwkU9ooG1sz8oy827z8-4oKUiwoE4V1-1ky824wdG7UK5U7u48aElwZwTwl8kzp8bEPBwwCxmbG1KxGcw920Foa8521NwsUiwko98e9EgyU4O5By47oG4oybyFomxW2S4ouwJCgggaE2eG8wHDyEco45e0JTU4a267U8Hw_wEiK48bpUaU7WbK17xd0bC36djwl8V7xe4U-axS1jwrUuxueg9E4yu12AzEiQ789U4ela486qE2iwp61xxJBw&__sjsp=g4fq4FEF28iGA4E42ax1123sygwa8ilEO1sWcGV0WGZ8sJ2h5daAmG8Ax5EIwBmGJDiq595jEONyvWitAiAH48ymzBIyJy2G9lOxe6kYFja293jqp5yoXLJ1ebCjP3Up62ojmEKEC26hyalcGcQOxegR7rgqFVqWaWW8zdsxql12a8A48pg-8W8hNYFECg-E_ypoy5XGEExkh9b5fybya8vaoUCGqKiECahKi5aUC8y94CAvzyybbJCJdxWpIzgNDQmaqEx2RgxoQUB1rH8Ujl6uibh2byoJ17h8Dgj46oaF4h151rGhJJ1JeCEKV-cBh8gzQt0LJouxh1y4XGn8n8bwBwvkt2hhVi7gV90gEUw-8J1cxHEy8FjEitV4sxqzUy5p4ihaieKq4O0puodwQxt0UAxmfh8d85qi2t0nERz8-0hem361Nw7sx6E8hMS3p3i242edgUq2Qw841dwd61Wo5ewQ0OE1ko0Iq0E83ewJ80g6awl8&__comet_req=15&fb_dtsg=NAftO4MpRGstU5SjER8WWyyBlN8MerGcI11T233Ilt27F74_XYNgv7A%%3A23%%3A1737397894&jazoest=25217&lsd=8JXVbwiNDdewcoTUr19-1Z&__spin_r=1025357550&__spin_b=trunk&__spin_t=1753963898&__crn=comet.fbweb.CometGroupDiscussionRoute&fb_api_caller_class=RelayModern&fb_api_req_friendly_name=ComposerStoryCreateMutation&variables=%s&server_timestamps=true&doc_id=31469424502648938", encodedVariables)
 
 	// Create HTTP request
 	req, err := http.NewRequest("POST", "https://web.facebook.com/api/graphql/", strings.NewReader(requestBody))
@@ -268,30 +236,29 @@ func CreateGroupPost(post FacebookPost) (FacebookPost, error) {
 		return post, fmt.Errorf("Error creating request: %v", err)
 	}
 
-	// Set headers from the curl request
-	req.Header.Set("Accept", "*/*")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	// Set headers from the curl request - exact values
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Origin", "https://web.facebook.com")
-	req.Header.Set("Priority", "u=1, i")
-	req.Header.Set("Referer", "https://web.facebook.com/groups/"+post.GroupID)
-	req.Header.Set("Sec-Ch-Prefers-Color-Scheme", "light")
-	req.Header.Set("Sec-Ch-Ua", `"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"`)
-	req.Header.Set("Sec-Ch-Ua-Full-Version-List", `"Not)A;Brand";v="8.0.0.0", "Chromium";v="138.0.7204.168", "Google Chrome";v="138.0.7204.168"`)
-	req.Header.Set("Sec-Ch-Ua-Mobile", "?0")
-	req.Header.Set("Sec-Ch-Ua-Model", `""`)
-	req.Header.Set("Sec-Ch-Ua-Platform", `"Linux"`)
-	req.Header.Set("Sec-Ch-Ua-Platform-Version", `"6.8.0"`)
-	req.Header.Set("Sec-Fetch-Dest", "empty")
-	req.Header.Set("Sec-Fetch-Mode", "cors")
-	req.Header.Set("Sec-Fetch-Site", "same-origin")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36")
-	req.Header.Set("X-Asbd-Id", "359341")
-	req.Header.Set("X-Fb-Friendly-Name", "ComposerStoryCreateMutation")
-	req.Header.Set("X-Fb-Lsd", "7yjkTI33tHoY5_gr2ktfw_")
-
+	req.Header.Set("priority", "u=1, i")
+	req.Header.Set("sec-fetch-site", "same-origin")
+	req.Header.Set("x-fb-lsd", "8JXVbwiNDdewcoTUr19-1Z")
+	req.Header.Set("accept-language", "en-US,en;q=0.9")
+	req.Header.Set("origin", "https://web.facebook.com")
+	req.Header.Set("sec-ch-prefers-color-scheme", "light")
+	req.Header.Set("sec-ch-ua-full-version-list", `"Not)A;Brand";v="8.0.0.0", "Chromium";v="138.0.7204.168", "Google Chrome";v="138.0.7204.168"`)
+	req.Header.Set("sec-ch-ua-platform", `"Linux"`)
+	req.Header.Set("sec-ch-ua-platform-version", `"6.8.0"`)
+	req.Header.Set("sec-fetch-dest", "empty")
+	req.Header.Set("sec-fetch-mode", "cors")
+	req.Header.Set("sec-ch-ua", `"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"`)
+	req.Header.Set("sec-ch-ua-model", `""`)
+	req.Header.Set("x-asbd-id", "359341")
+	req.Header.Set("x-fb-friendly-name", "ComposerStoryCreateMutation")
+	req.Header.Set("accept", "*/*")
+	req.Header.Set("referer", "https://web.facebook.com/groups/894063942126928")
+	req.Header.Set("sec-ch-ua-mobile", "?0")
+	req.Header.Set("user-agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36")
 	// Set cookies from the curl request
-	req.Header.Set("Cookie", "sb=XWoHZ-GdXVwlvXZrSaFe7gwz; ps_l=1; ps_n=1; datr=78xqZ8Fc-vdpp5Ii5nGp2A0P; c_user=61560452168137; fr=1a15IgfoL9YD8UJdb.AWeGji5rDy2rm4SEmo8-nOt83EMVrk9hwCYHYfy806YGW-UXyaA.BoidJJ..AAA.0.0.BoidJJ.AWfz2onld5nimQfpPC3ByT3JxNk; xs=8%3AeMpQ9UiVlPPogg%3A2%3A1735880128%3A-1%3A-1%3AqSC9VrelgmIhZA%3AAcX82BDvQ8ITJ-PMf5_tPa7D8oEZNhi45oevhYbng0dV; wd=1366x681; presence=C%7B%22t3%22%3A%5B%5D%2C%22utc3%22%3A1753877990211%2C%22v%22%3A1%7D")
+	req.Header.Set("Cookie", "ar_debug=1; ps_n=1; datr=bpaOZ6y9AuJ3LuuspFRSlBZF; c_user=61555590462485; wd=1366x681; sb=TE0JZ7NYzOmh0Gpb3d5BFjVf; ps_l=1; fr=15wX5RIbJZj770eqv.AWe6cw0dSholVKUkqtSgGhdbH4iC4evl2HvnXiwhz7jt370aZ24.Boi1M-..AAA.0.0.Boi1M-.AWfyUDb8Pl2vd1OBsfpj1cC27mo; xs=23%3AvABQDiJTzL7XLA%3A2%3A1737397894%3A-1%3A-1%3A%3AAcXTgo2kLkb6NfDrwvJegyyOvpL_Op5sgQXHXg4KfoXy; presence=C%7B%22t3%22%3A%5B%5D%2C%22utc3%22%3A1753963908991%2C%22v%22%3A1%7D")
 
 	// Create HTTP client
 	client := &http.Client{}
@@ -303,6 +270,18 @@ func CreateGroupPost(post FacebookPost) (FacebookPost, error) {
 		return post, fmt.Errorf("Error making request: %v", err)
 	}
 	defer resp.Body.Close()
+
+	fmt.Println("Response status:", resp.Status)
+	fmt.Println("Response headers:", resp.Header)
+
+	// Read the response body
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("Error reading response body: %v\n", err)
+	} else {
+		fmt.Printf("Response body (raw): %s\n", string(bodyBytes))
+		fmt.Printf("Response body length: %d bytes\n", len(bodyBytes))
+	}
 
 	return post, nil
 }

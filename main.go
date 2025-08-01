@@ -5,37 +5,30 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"os"
 	"time"
 )
 
-// type FacebookPost struct {
-// 	MessageText string
-// 	PhotoIDs    []string
-// 	GroupID     string
-// }
-
 func main() {
+
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	phonesPath := "/home/kwandapchumba/Pictures/SIMU"
 
-	//groupIDs := []string{}
-
-	groups, err := utils.FetchGroups()
+	err := utils.UpdateFetchGroupsCookies()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// for _, group := range groups {
-	// 	groupIDs = append(groupIDs, group.ID)
-	// }
-
-	// r.Shuffle(len(groupIDs), func(i, j int) {
-	// 	groupIDs[i], groupIDs[j] = groupIDs[j], groupIDs[i]
-	// })
+	groups, err := utils.FetchGroups(r)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	r.Shuffle(len(groups), func(i, j int) {
 		groups[i], groups[j] = groups[j], groups[i]
 	})
+
+	fmt.Println("Total groups: ", len(groups))
 
 	for _, group := range groups {
 		groupName := group.Name
@@ -57,6 +50,11 @@ func main() {
 
 		photoIDs := []string{}
 
+		err = utils.UpdateUploadPhotoCookies()
+		if err != nil {
+			log.Fatal(err)
+		}
+
 		for _, imagePath := range phone.ImagePaths {
 			imageID, err := utils.UploadImage(imagePath)
 			if err != nil {
@@ -73,6 +71,11 @@ func main() {
 			GroupID:     group.ID,
 		}
 
+		err = utils.UpdateCreateGroupPostCookies()
+		if err != nil {
+			log.Fatal(err)
+		}
+
 		post, err = utils.CreateGroupPost(post)
 		if err != nil {
 			log.Fatal(err)
@@ -80,11 +83,12 @@ func main() {
 
 		fmt.Printf("%v created\n Group Name: %s\n Group URL: %s\n", post, groupName, groupURL)
 
-		duration := utils.ReturnRandomNumberBetween2And5(r)
+		os.Exit(0)
+
+		duration := utils.ReturnRandomNumber(r, 2, 4)
 
 		time.Sleep(time.Duration(duration) * time.Minute)
 
 		fmt.Printf("Sleeping for %f minutes\n", duration)
 	}
-
 }
