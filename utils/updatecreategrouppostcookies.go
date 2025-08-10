@@ -1,129 +1,161 @@
 package utils
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"net/url"
+
 	"os"
 	"regexp"
 	"strings"
 )
 
-func UpdateCreateGroupPostCookies() error {
-	// Read the curl command from file
-	curlData, err := readCreateGroupPostCurlRequest("cookies/creategrouppostcookies.txt")
+// CurlData holds the extracted data from a cURL request
+type CurlData struct {
+	UserID             string
+	SessionID          string
+	AttributionID      string
+	LSD                string
+	Cookies            string
+	Headers            map[string]string
+	FormData           map[string]string
+	GroupID            string
+	MessageText        string
+	PhotoIDs           []string
+	ComposerEntryPoint string
+}
+
+// UpdateCreateGroupPostFunctionFromCurl takes cURL command string and updates Go code file
+func UpdateCreateGroupPostFunctionFromCurl(curlCommand string, goFilePath string) error {
+	// Parse cURL command
+	curlData, err := parseCurlCommand(curlCommand)
 	if err != nil {
-		return fmt.Errorf("error reading curl request: %w", err)
+		return fmt.Errorf("error parsing cURL command: %v", err)
 	}
 
-	// Parse the curl command
-	parsedData, err := parseCreateGroupPostCurlRequest(curlData)
+	// Read existing Go file
+	goContent, err := os.ReadFile(goFilePath)
 	if err != nil {
-		return fmt.Errorf("error parsing curl request: %w", err)
+		return fmt.Errorf("error reading Go file '%s': %v", goFilePath, err)
 	}
 
-	// Update the creategrouppost.go file
-	err = updateCreateGroupPostFile(parsedData)
+	// Update Go code with new values
+	updatedCode, err := updateCode(string(goContent), curlData)
 	if err != nil {
-		return fmt.Errorf("error updating file: %w", err)
+		return fmt.Errorf("error updating Go code: %v", err)
 	}
 
-	fmt.Println("✅ CreateGroupPost cookies updated successfully!")
+	// Write updated code back to file
+	err = os.WriteFile(goFilePath, []byte(updatedCode), 0644)
+	if err != nil {
+		return fmt.Errorf("error writing updated Go file '%s': %v", goFilePath, err)
+	}
+
+	fmt.Printf("✅ Successfully updated %s with fresh cURL values\n", goFilePath)
 	return nil
 }
 
-func readCreateGroupPostCurlRequest(filename string) (string, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return "", fmt.Errorf("error opening file %s: %w", filename, err)
+// UpdateCodeFromCurl reads a cURL command from a file and updates the Go code
+// func UpdateCodeFromCurl(curlFilePath, goFilePath string) error {
+// 	// Validate file paths
+// 	if len(curlFilePath) > 100 {
+// 		return fmt.Errorf("cURL file path too long (max 100 chars): %d chars", len(curlFilePath))
+// 	}
+// 	if len(goFilePath) > 100 {
+// 		return fmt.Errorf("Go file path too long (max 100 chars): %d chars", len(goFilePath))
+// 	}
+
+// 	// Read cURL command from file
+// 	curlContent, err := ioutil.ReadFile(curlFilePath)
+// 	if err != nil {
+// 		return fmt.Errorf("error reading cURL file '%s': %v", curlFilePath, err)
+// 	}
+
+// 	// Parse cURL command
+// 	curlData, err := parseCurlCommand(string(curlContent))
+// 	if err != nil {
+// 		return fmt.Errorf("error parsing cURL command: %v", err)
+// 	}
+
+// 	// Read existing Go file
+// 	goContent, err := ioutil.ReadFile(goFilePath)
+// 	if err != nil {
+// 		return fmt.Errorf("error reading Go file '%s': %v", goFilePath, err)
+// 	}
+
+// 	// Update Go code with new values
+// 	updatedCode, err := updateGoCode(string(goContent), curlData)
+// 	if err != nil {
+// 		return fmt.Errorf("error updating Go code: %v", err)
+// 	}
+
+// 	// Write updated code back to file
+// 	err = ioutil.WriteFile(goFilePath, []byte(updatedCode), 0644)
+// 	if err != nil {
+// 		return fmt.Errorf("error writing updated Go file '%s': %v", goFilePath, err)
+// 	}
+
+// 	fmt.Printf("✅ Successfully updated %s with fresh values from %s\n", goFilePath, curlFilePath)
+// 	return nil
+// }
+
+// parseCurlCommand extracts relevant data from a cURL command
+func parseCurlCommand(curlCmd string) (*CurlData, error) {
+	data := &CurlData{
+		Headers:  make(map[string]string),
+		FormData: make(map[string]string),
 	}
-	defer file.Close()
 
-	scanner := bufio.NewScanner(file)
-	var lines []string
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
+	// Remove line breaks and extra spaces
+	curlCmd = strings.ReplaceAll(curlCmd, "\\\n", " ")
+	curlCmd = regexp.MustCompile(`\s+`).ReplaceAllString(curlCmd, " ")
+
+	// Extract cookies
+	cookieRegex := regexp.MustCompile(`-b\s+'([^']+)'`)
+	if matches := cookieRegex.FindStringSubmatch(curlCmd); len(matches) > 1 {
+		data.Cookies = matches[1]
+
+		// Extract user ID from cookies
+		userRegex := regexp.MustCompile(`c_user=(\d+)`)
+		if userMatches := userRegex.FindStringSubmatch(data.Cookies); len(userMatches) > 1 {
+			data.UserID = userMatches[1]
+		}
 	}
 
-	if err := scanner.Err(); err != nil {
-		return "", fmt.Errorf("error reading file: %w", err)
+	// Extract headers
+	headerRegex := regexp.MustCompile(`-H\s+'([^:]+):\s*([^']+)'`)
+	headerMatches := headerRegex.FindAllStringSubmatch(curlCmd, -1)
+	for _, match := range headerMatches {
+		if len(match) > 2 {
+			data.Headers[match[1]] = match[2]
+		}
 	}
 
-	return strings.Join(lines, "\n"), nil
-}
-
-type CreateGroupPostParsedData struct {
-	URLParams map[string]string
-	Headers   map[string]string
-	Cookies   map[string]string
-	Variables map[string]interface{}
-}
-
-func parseCreateGroupPostCurlRequest(curlData string) (*CreateGroupPostParsedData, error) {
-	data := &CreateGroupPostParsedData{
-		URLParams: make(map[string]string),
-		Headers:   make(map[string]string),
-		Cookies:   make(map[string]string),
-		Variables: make(map[string]interface{}),
+	// Extract LSD from headers
+	if lsd, exists := data.Headers["x-fb-lsd"]; exists {
+		data.LSD = lsd
 	}
 
-	lines := strings.Split(curlData, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
+	// Extract form data
+	dataRegex := regexp.MustCompile(`--data-raw\s+'([^']+)'`)
+	if matches := dataRegex.FindStringSubmatch(curlCmd); len(matches) > 1 {
+		formDataStr := matches[1]
 
-		// Parse headers (-H) - handle both single and double quotes
-		if strings.HasPrefix(line, "-H") {
-			// Try single quotes first
-			headerMatch := regexp.MustCompile(`-H\s+'([^:]+):\s*([^']*)'`).FindStringSubmatch(line)
-			if len(headerMatch) == 3 {
-				key := strings.TrimSpace(headerMatch[1])
-				value := strings.TrimSpace(headerMatch[2])
-				data.Headers[key] = value
-				fmt.Printf("🔍 DEBUG: Parsed header %s = %s\n", key, value)
-			} else {
-				// Try double quotes
-				headerMatch = regexp.MustCompile(`-H\s+"([^:]+):\s*([^"]*)"`).FindStringSubmatch(line)
-				if len(headerMatch) == 3 {
-					key := strings.TrimSpace(headerMatch[1])
-					value := strings.TrimSpace(headerMatch[2])
-					data.Headers[key] = value
-					fmt.Printf("🔍 DEBUG: Parsed header %s = %s\n", key, value)
+		// Parse URL-encoded form data
+		formValues, err := url.ParseQuery(formDataStr)
+		if err == nil {
+			for key, values := range formValues {
+				if len(values) > 0 {
+					data.FormData[key] = values[0]
 				}
 			}
 		}
 
-		// Parse cookies (-b) - handle both single and double quotes
-		if strings.HasPrefix(line, "-b") {
-			// Try single quotes first
-			cookieMatch := regexp.MustCompile(`-b\s+'([^']*)'`).FindStringSubmatch(line)
-			if len(cookieMatch) == 2 {
-				cookies := cookieMatch[1]
-				parseCookies(cookies, data.Cookies)
-			} else {
-				// Try double quotes
-				cookieMatch = regexp.MustCompile(`-b\s+"([^"]*)"`).FindStringSubmatch(line)
-				if len(cookieMatch) == 2 {
-					cookies := cookieMatch[1]
-					parseCookies(cookies, data.Cookies)
-				}
-			}
-		}
-
-		// Parse URL parameters (from --data-raw) - handle both single and double quotes
-		if strings.Contains(line, "--data-raw") {
-			// Try single quotes first
-			dataMatch := regexp.MustCompile(`--data-raw\s+'([^']*)'`).FindStringSubmatch(line)
-			if len(dataMatch) == 2 {
-				rawData := dataMatch[1]
-				parseURLParams(rawData, data.URLParams)
-			} else {
-				// Try double quotes
-				dataMatch = regexp.MustCompile(`--data-raw\s+"([^"]*)"`).FindStringSubmatch(line)
-				if len(dataMatch) == 2 {
-					rawData := dataMatch[1]
-					parseURLParams(rawData, data.URLParams)
-				}
+		// Extract variables JSON if present
+		if variablesStr, exists := data.FormData["variables"]; exists {
+			err := extractVariablesData(variablesStr, data)
+			if err != nil {
+				fmt.Printf("Warning: Could not parse variables JSON: %v\n", err)
 			}
 		}
 	}
@@ -131,445 +163,273 @@ func parseCreateGroupPostCurlRequest(curlData string) (*CreateGroupPostParsedDat
 	return data, nil
 }
 
-func parseCookies(cookieString string, cookieMap map[string]string) {
-	cookies := strings.Split(cookieString, ";")
-	for _, cookie := range cookies {
-		cookie = strings.TrimSpace(cookie)
-		if cookie == "" {
-			continue
-		}
-
-		parts := strings.SplitN(cookie, "=", 2)
-		if len(parts) == 2 {
-			key := strings.TrimSpace(parts[0])
-			value := strings.TrimSpace(parts[1])
-			cookieMap[key] = value
-		}
-	}
-}
-
-func parseURLParams(rawData string, paramMap map[string]string) {
-	// Handle double encoding first - replace %% with % to get the original encoded value
-	rawData = strings.ReplaceAll(rawData, "%%", "%")
-
-	// Split by & to get individual parameters (don't decode the entire string)
-	params := strings.Split(rawData, "&")
-	for _, param := range params {
-		parts := strings.SplitN(param, "=", 2)
-		if len(parts) == 2 {
-			key := parts[0]
-			value := parts[1]
-
-			// Handle double encoding in the value as well
-			value = strings.ReplaceAll(value, "%%", "%")
-
-			// Keep the value as-is (URL encoded) since that's what we want in the request body
-			paramMap[key] = value
-			fmt.Printf("🔍 DEBUG: Parsed param %s = %s\n", key, value)
-		}
-	}
-}
-
-func updateCreateGroupPostFile(parsedData *CreateGroupPostParsedData) error {
-	// Read the current file
-	content, err := os.ReadFile("utils/creategrouppost.go")
+// extractVariablesData parses the variables JSON to extract additional data
+func extractVariablesData(variablesStr string, data *CurlData) error {
+	// URL decode the variables string
+	decodedVars, err := url.QueryUnescape(variablesStr)
 	if err != nil {
-		return fmt.Errorf("error reading file: %w", err)
+		return err
 	}
 
-	fmt.Printf("🔍 DEBUG: Starting update with %d form data items and %d headers\n", len(parsedData.URLParams), len(parsedData.Headers))
-
-	contentStr := string(content)
-
-	// Ensure proper file structure before updates
-	contentStr = ensureProperFileStructure(contentStr)
-
-	// 1. Update the request body with exact values from curl
-	contentStr = updateRequestBody(contentStr, parsedData.URLParams)
-
-	// 2. Update all headers with exact values from curl
-	contentStr = updateAllHeaders(contentStr, parsedData.Headers)
-
-	// 3. Update cookies
-	contentStr = updateCookies(contentStr, parsedData.Cookies)
-
-	// 4. Update variables JSON values
-	contentStr = updateAllVariables(contentStr, parsedData)
-
-	// Write the updated content back
-	err = os.WriteFile("utils/creategrouppost.go", []byte(contentStr), 0644)
+	// Parse JSON
+	var variables map[string]interface{}
+	err = json.Unmarshal([]byte(decodedVars), &variables)
 	if err != nil {
-		return fmt.Errorf("error writing file: %w", err)
+		return err
+	}
+
+	// Extract input data
+	if input, ok := variables["input"].(map[string]interface{}); ok {
+		// Extract composer entry point
+		if entryPoint, ok := input["composer_entry_point"].(string); ok {
+			data.ComposerEntryPoint = entryPoint
+		}
+
+		// Extract session ID
+		if logging, ok := input["logging"].(map[string]interface{}); ok {
+			if sessionID, ok := logging["composer_session_id"].(string); ok {
+				data.SessionID = sessionID
+			}
+		}
+
+		// Extract attribution ID
+		if navData, ok := input["navigation_data"].(map[string]interface{}); ok {
+			if attrID, ok := navData["attribution_id_v2"].(string); ok {
+				data.AttributionID = attrID
+			}
+		}
+
+		// Extract group ID
+		if audience, ok := input["audience"].(map[string]interface{}); ok {
+			if groupID, ok := audience["to_id"].(string); ok {
+				data.GroupID = groupID
+			}
+		}
+
+		// Extract message text
+		if message, ok := input["message"].(map[string]interface{}); ok {
+			if text, ok := message["text"].(string); ok {
+				data.MessageText = text
+			}
+		}
+
+		// Extract photo IDs
+		if attachments, ok := input["attachments"].([]interface{}); ok {
+			for _, attachment := range attachments {
+				if attachMap, ok := attachment.(map[string]interface{}); ok {
+					if photo, ok := attachMap["photo"].(map[string]interface{}); ok {
+						if photoID, ok := photo["id"].(string); ok {
+							data.PhotoIDs = append(data.PhotoIDs, photoID)
+						}
+					}
+				}
+			}
+		}
 	}
 
 	return nil
 }
 
-func updateRequestBody(content string, urlParams map[string]string) string {
-	// Build the exact request body string from the curl command with proper URL encoding
-	// and escape % characters for fmt.Sprintf format string
+// updateGoCode replaces values in the Go code with fresh data from cURL
+func updateCode(goCode string, data *CurlData) (string, error) {
+	updatedCode := goCode
 
-	// Define required parameters and their default values
-	requiredParams := map[string]string{
-		"av":                       "",
-		"__aaid":                   "",
-		"__user":                   "",
-		"__a":                      "",
-		"__req":                    "",
-		"__hs":                     "",
-		"dpr":                      "",
-		"__ccg":                    "",
-		"__rev":                    "",
-		"__s":                      "",
-		"__hsi":                    "",
-		"__dyn":                    "",
-		"__csr":                    "",
-		"__hsdp":                   "",
-		"__hblp":                   "",
-		"__sjsp":                   "",
-		"__comet_req":              "",
-		"fb_dtsg":                  "",
-		"jazoest":                  "",
-		"lsd":                      "",
-		"__spin_r":                 "",
-		"__spin_b":                 "",
-		"__spin_t":                 "",
-		"__crn":                    "",
-		"fb_api_caller_class":      "",
-		"fb_api_req_friendly_name": "",
-		"server_timestamps":        "",
-		"doc_id":                   "",
-	}
+	// Build complete request body from form data with double-escaped format for fmt.Sprintf
+	if len(data.FormData) > 0 {
+		// First, let's replace the entire fmt.Sprintf requestBody pattern
+		requestBodyPattern := regexp.MustCompile(`requestBody\s*:=\s*fmt\.Sprintf\("([^"]*)",\s*encodedVariables\)`)
 
-	// Use values from curl request, fallback to defaults if missing
-	for key := range requiredParams {
-		if value, exists := urlParams[key]; exists && value != "" {
-			requiredParams[key] = value
-			fmt.Printf("✅ Using curl value for %s: %s\n", key, value)
-		} else {
-			fmt.Printf("⚠️  Missing or empty value for %s, using default\n", key)
+		// Build new request body from extracted form data with double-escaping
+		var formPairs []string
+		paramOrder := []string{
+			"av", "__aaid", "__user", "__a", "__req", "__hs", "dpr", "__ccg", "__rev", "__s", "__hsi",
+			"__dyn", "__csr", "__hsdp", "__hblp", "__sjsp", "__comet_req", "fb_dtsg", "jazoest",
+			"lsd", "__spin_r", "__spin_b", "__spin_t", "__crn", "fb_api_caller_class",
+			"fb_api_req_friendly_name", "server_timestamps", "doc_id",
 		}
-	}
 
-	// Debug: Check for encoding issues in specific parameters
-	encodingIssues := []string{"__hs", "__s", "fb_dtsg"}
-	for _, param := range encodingIssues {
-		if value, exists := requiredParams[param]; exists && value != "" {
-			if strings.Contains(value, "%%") {
-				fmt.Printf("🔧 Fixed double encoding in %s: %s\n", param, value)
-			} else {
-				fmt.Printf("✅ No encoding issues in %s: %s\n", param, value)
+		// Add parameters in order with proper double-escaping for fmt.Sprintf
+		for _, param := range paramOrder {
+			if value, exists := data.FormData[param]; exists && param != "variables" {
+				// Double-escape URL-encoded characters for fmt.Sprintf
+				escapedValue := doubleEscapeForFmtSprintf(value)
+				formPairs = append(formPairs, fmt.Sprintf("%s=%s", param, escapedValue))
 			}
 		}
-	}
 
-	params := []string{
-		fmt.Sprintf("av=%s", fixURLEncoding(requiredParams["av"])),
-		fmt.Sprintf("__aaid=%s", fixURLEncoding(requiredParams["__aaid"])),
-		fmt.Sprintf("__user=%s", fixURLEncoding(requiredParams["__user"])),
-		fmt.Sprintf("__a=%s", fixURLEncoding(requiredParams["__a"])),
-		fmt.Sprintf("__req=%s", fixURLEncoding(requiredParams["__req"])),
-		fmt.Sprintf("__hs=%s", fixURLEncoding(requiredParams["__hs"])),
-		fmt.Sprintf("dpr=%s", fixURLEncoding(requiredParams["dpr"])),
-		fmt.Sprintf("__ccg=%s", fixURLEncoding(requiredParams["__ccg"])),
-		fmt.Sprintf("__rev=%s", fixURLEncoding(requiredParams["__rev"])),
-		fmt.Sprintf("__s=%s", fixURLEncoding(requiredParams["__s"])),
-		fmt.Sprintf("__hsi=%s", fixURLEncoding(requiredParams["__hsi"])),
-		fmt.Sprintf("__dyn=%s", fixURLEncoding(requiredParams["__dyn"])),
-		fmt.Sprintf("__csr=%s", fixURLEncoding(requiredParams["__csr"])),
-		fmt.Sprintf("__hsdp=%s", fixURLEncoding(requiredParams["__hsdp"])),
-		fmt.Sprintf("__hblp=%s", fixURLEncoding(requiredParams["__hblp"])),
-		fmt.Sprintf("__sjsp=%s", fixURLEncoding(requiredParams["__sjsp"])),
-		fmt.Sprintf("__comet_req=%s", fixURLEncoding(requiredParams["__comet_req"])),
-		fmt.Sprintf("fb_dtsg=%s", fixURLEncoding(requiredParams["fb_dtsg"])),
-		fmt.Sprintf("jazoest=%s", fixURLEncoding(requiredParams["jazoest"])),
-		fmt.Sprintf("lsd=%s", fixURLEncoding(requiredParams["lsd"])),
-		fmt.Sprintf("__spin_r=%s", fixURLEncoding(requiredParams["__spin_r"])),
-		fmt.Sprintf("__spin_b=%s", fixURLEncoding(requiredParams["__spin_b"])),
-		fmt.Sprintf("__spin_t=%s", fixURLEncoding(requiredParams["__spin_t"])),
-		fmt.Sprintf("__crn=%s", fixURLEncoding(requiredParams["__crn"])),
-		fmt.Sprintf("fb_api_caller_class=%s", fixURLEncoding(requiredParams["fb_api_caller_class"])),
-		fmt.Sprintf("fb_api_req_friendly_name=%s", fixURLEncoding(requiredParams["fb_api_req_friendly_name"])),
-		"variables=%s",
-		fmt.Sprintf("server_timestamps=%s", fixURLEncoding(requiredParams["server_timestamps"])),
-		fmt.Sprintf("doc_id=%s", fixURLEncoding(requiredParams["doc_id"])),
-	}
-
-	requestBody := strings.Join(params, "&")
-
-	// Replace the entire requestBody line with proper formatting
-	pattern := regexp.MustCompile(`requestBody := fmt\.Sprintf\(".*", encodedVariables\)`)
-	replacement := fmt.Sprintf(`	requestBody := fmt.Sprintf("%s", encodedVariables)`, requestBody)
-
-	updated := pattern.ReplaceAllString(content, replacement)
-	fmt.Printf("✅ Updated request body with exact values from curl (with proper URL encoding and %% escaping)\n")
-
-	// Validate the encoding fix
-	validateEncodingFix(updated)
-
-	return updated
-}
-
-// escapePercentSigns escapes % characters in URL-encoded values for fmt.Sprintf format strings
-// escapePercentSigns escapes % characters for fmt.Sprintf format strings
-// but preserves valid URL encoding sequences like %3A, %2F, etc.
-func escapePercentSigns(value string) string {
-	// For fmt.Sprintf, we need to escape % characters, but we want to preserve the original encoding
-	// So we'll use the original value if it's already properly encoded, otherwise encode it
-	if strings.Contains(value, "%") && !strings.Contains(value, "%%") {
-		// Value is already URL encoded, just escape % for fmt.Sprintf
-		return strings.ReplaceAll(value, "%", "%%")
-	} else {
-		// Value needs to be URL encoded first, then escaped for fmt.Sprintf
-		return strings.ReplaceAll(value, "%", "%%")
-	}
-}
-
-// fixURLEncoding fixes the double encoding issue by properly handling URL encoding
-func fixURLEncoding(value string) string {
-	// The value from curl request is already URL encoded, we just need to escape % for fmt.Sprintf
-	// Handle double encoding first - replace %% with % to get the original encoded value
-	value = strings.ReplaceAll(value, "%%", "%")
-
-	// Simply escape % for fmt.Sprintf without re-encoding
-	return escapePercentSigns(value)
-}
-
-// validateEncodingFix checks if the encoding issues have been resolved
-func validateEncodingFix(content string) {
-	// Check for proper fmt.Sprintf escaping - %%3A is correct for fmt.Sprintf
-	patterns := []string{
-		`__hs=.*%%3A`,
-		`__s=.*%%3A`,
-		`fb_dtsg=.*%%3A`,
-	}
-
-	foundIssues := false
-	for _, pattern := range patterns {
-		re := regexp.MustCompile(pattern)
-		if re.MatchString(content) {
-			fmt.Printf("✅ Found correct fmt.Sprintf escaping in pattern: %s\n", pattern)
-		} else {
-			fmt.Printf("⚠️  Missing proper fmt.Sprintf escaping in pattern: %s\n", pattern)
-			foundIssues = true
-		}
-	}
-
-	if !foundIssues {
-		fmt.Printf("🎉 All encoding issues have been resolved!\n")
-	} else {
-		fmt.Printf("🔧 Some encoding issues still need attention\n")
-	}
-}
-
-func updateAllHeaders(content string, headers map[string]string) string {
-	// Find the header section and replace all headers at once
-	headerStart := strings.Index(content, "// Set headers from the curl request")
-	if headerStart == -1 {
-		return content
-	}
-
-	// Find the end of the header section (before cookies)
-	headerEnd := strings.Index(content[headerStart:], "// Set cookies from the curl request")
-	if headerEnd == -1 {
-		return content
-	}
-	headerEnd += headerStart
-
-	// Build all header lines with proper formatting
-	var headerLines []string
-	headerLines = append(headerLines, "	// Set headers from the curl request - exact values")
-
-	// Always add Content-Type header first
-	headerLines = append(headerLines, "	req.Header.Set(\"Content-Type\", \"application/x-www-form-urlencoded\")")
-
-	for key, value := range headers {
-		// Skip Content-Type as we already added it above
-		if strings.ToLower(key) == "content-type" {
-			continue
-		}
-
-		// Use backticks for headers with quotes to avoid escaping issues
-		if strings.Contains(value, `"`) {
-			headerLines = append(headerLines, fmt.Sprintf("	req.Header.Set(\"%s\", `%s`)", key, value))
-		} else {
-			headerLines = append(headerLines, fmt.Sprintf("	req.Header.Set(\"%s\", \"%s\")", key, value))
-		}
-		fmt.Printf("✅ Updated header: %s = %s\n", key, value)
-	}
-
-	// Add a blank line before the cookie section
-	headerLines = append(headerLines, "")
-
-	// Replace the entire header section
-	oldHeaderSection := content[headerStart:headerEnd]
-	newHeaderSection := strings.Join(headerLines, "\n")
-
-	updated := strings.Replace(content, oldHeaderSection, newHeaderSection, 1)
-	fmt.Printf("✅ Updated all %d headers\n", len(headers))
-
-	return updated
-}
-
-func updateCookies(content string, cookies map[string]string) string {
-	cookieString := buildCookieString(cookies)
-
-	// Replace the cookie line with proper formatting
-	pattern := regexp.MustCompile(`req\.Header\.Set\("Cookie",\s*"[^"]*"\)`)
-	replacement := fmt.Sprintf("	req.Header.Set(\"Cookie\", \"%s\")", cookieString)
-
-	updated := pattern.ReplaceAllString(content, replacement)
-	fmt.Printf("✅ Updated cookies\n")
-
-	return updated
-}
-
-func updateAllVariables(content string, parsedData *CreateGroupPostParsedData) string {
-	// Extract variables from the parsed data
-	variablesStr, exists := parsedData.URLParams["variables"]
-	if !exists {
-		return content
-	}
-
-	// URL decode the variables
-	decoded, err := url.QueryUnescape(variablesStr)
-	if err != nil {
-		return content
-	}
-
-	var variables map[string]interface{}
-	if json.Unmarshal([]byte(decoded), &variables) != nil {
-		return content
-	}
-
-	// Extract values from the variables JSON
-	input, ok := variables["input"].(map[string]interface{})
-	if !ok {
-		return content
-	}
-
-	// Update ActorID from variables JSON (not from av parameter)
-	if input, ok := variables["input"].(map[string]interface{}); ok {
-		if actorID, ok := input["actor_id"].(string); ok {
-			pattern := regexp.MustCompile(`ActorID:\s*"[^"]*"`)
-			replacement := fmt.Sprintf(`ActorID: "%s"`, actorID)
-			content = pattern.ReplaceAllString(content, replacement)
-			fmt.Printf("✅ Updated ActorID: %s\n", actorID)
-		}
-	}
-
-	// Update ClientMutationID from variables JSON (not from __req parameter)
-	if input, ok := variables["input"].(map[string]interface{}); ok {
-		if mutationID, ok := input["client_mutation_id"].(string); ok {
-			pattern := regexp.MustCompile(`ClientMutationID:\s*"[^"]*"`)
-			replacement := fmt.Sprintf(`ClientMutationID: "%s"`, mutationID)
-			content = pattern.ReplaceAllString(content, replacement)
-			fmt.Printf("✅ Updated ClientMutationID: %s\n", mutationID)
-		}
-	}
-
-	// Update ComposerSessionID
-	if logging, ok := input["logging"].(map[string]interface{}); ok {
-		if sessionID, ok := logging["composer_session_id"].(string); ok {
-			pattern := regexp.MustCompile(`ComposerSessionID:\s*"[^"]*"`)
-			replacement := fmt.Sprintf(`ComposerSessionID: "%s"`, sessionID)
-			content = pattern.ReplaceAllString(content, replacement)
-			fmt.Printf("✅ Updated ComposerSessionID: %s\n", sessionID)
-		}
-	}
-
-	// Update ComposerEntryPoint
-	if entryPoint, ok := input["composer_entry_point"].(string); ok {
-		pattern := regexp.MustCompile(`ComposerEntryPoint:\s*"[^"]*"`)
-		replacement := fmt.Sprintf(`ComposerEntryPoint: "%s"`, entryPoint)
-		content = pattern.ReplaceAllString(content, replacement)
-		fmt.Printf("✅ Updated ComposerEntryPoint: %s\n", entryPoint)
-	}
-
-	// Update AttributionIDV2
-	if navigationData, ok := input["navigation_data"].(map[string]interface{}); ok {
-		if attributionID, ok := navigationData["attribution_id_v2"].(string); ok {
-			pattern := regexp.MustCompile(`AttributionIDV2:\s*"[^"]*"`)
-			replacement := fmt.Sprintf(`AttributionIDV2: "%s"`, attributionID)
-			content = pattern.ReplaceAllString(content, replacement)
-			fmt.Printf("✅ Updated AttributionIDV2: %s\n", attributionID)
-		}
-	}
-
-	// Update EventShareMetadata.Surface from variables JSON
-	if input, ok := variables["input"].(map[string]interface{}); ok {
-		if eventShareMetadata, ok := input["event_share_metadata"].(map[string]interface{}); ok {
-			if surface, ok := eventShareMetadata["surface"].(string); ok {
-				pattern := regexp.MustCompile(`Surface:\s*"[^"]*"`)
-				replacement := fmt.Sprintf(`Surface: "%s"`, surface)
-				content = pattern.ReplaceAllString(content, replacement)
-				fmt.Printf("✅ Updated Surface: %s\n", surface)
+		// Add any missing parameters
+		for param, value := range data.FormData {
+			if param != "variables" {
+				found := false
+				for _, orderedParam := range paramOrder {
+					if param == orderedParam {
+						found = true
+						break
+					}
+				}
+				if !found {
+					escapedValue := doubleEscapeForFmtSprintf(value)
+					formPairs = append(formPairs, fmt.Sprintf("%s=%s", param, escapedValue))
+				}
 			}
 		}
+
+		// Build the new request body (without variables, we'll add that with %s)
+		newRequestBodyTemplate := strings.Join(formPairs, "&") + "&variables=%s"
+
+		// Replace the entire requestBody assignment
+		newRequestBodyLine := fmt.Sprintf(`requestBody := fmt.Sprintf("%s", encodedVariables)`, newRequestBodyTemplate)
+		updatedCode = requestBodyPattern.ReplaceAllString(updatedCode, newRequestBodyLine)
 	}
 
-	// Update static values
-	updates := map[string]string{
-		`ComposerSourceSurface:\s*"[^"]*"`: `ComposerSourceSurface: "group"`,
-		`ComposerType:\s*"[^"]*"`:          `ComposerType: "group"`,
-		`Source:\s*"[^"]*"`:                `Source: "WWW"`,
+	// Update user/actor ID in struct
+	if data.UserID != "" {
+		actorIDRegex := regexp.MustCompile(`ActorID:\s*"[^"]*"`)
+		updatedCode = actorIDRegex.ReplaceAllString(updatedCode, fmt.Sprintf(`ActorID: "%s"`, data.UserID))
 	}
 
-	for pattern, replacement := range updates {
-		re := regexp.MustCompile(pattern)
-		content = re.ReplaceAllString(content, replacement)
+	// Update composer entry point
+	if data.ComposerEntryPoint != "" {
+		entryPointRegex := regexp.MustCompile(`ComposerEntryPoint:\s*"[^"]*"`)
+		updatedCode = entryPointRegex.ReplaceAllString(updatedCode, fmt.Sprintf(`ComposerEntryPoint: "%s"`, data.ComposerEntryPoint))
 	}
 
-	// 🔧 FIX STRUCTURAL ISSUES
-	// Fix 1: Remove ComposedText structure from struct definition
-	composedTextStructPattern := regexp.MustCompile(`(?s)ComposedText\s+struct\s*\{[^}]*\}\s*` + "`json:\"composed_text\"`")
-	content = composedTextStructPattern.ReplaceAllString(content, "")
-	fmt.Printf("🔧 Removed ComposedText structure from struct definition\n")
+	// Update session ID
+	if data.SessionID != "" {
+		sessionIDRegex := regexp.MustCompile(`ComposerSessionID:\s*"[^"]*"`)
+		updatedCode = sessionIDRegex.ReplaceAllString(updatedCode, fmt.Sprintf(`ComposerSessionID: "%s"`, data.SessionID))
+	}
 
-	// Fix 2: Remove ComposedText field assignment (more comprehensive pattern)
-	composedTextAssignmentPattern := regexp.MustCompile(`(?s)ComposedText:\s*struct\s*\{[^}]*\}\s*\{[^}]*\},?`)
-	content = composedTextAssignmentPattern.ReplaceAllString(content, "")
-	fmt.Printf("🔧 Removed ComposedText field assignment\n")
+	// Update attribution ID
+	if data.AttributionID != "" {
+		attrIDRegex := regexp.MustCompile(`AttributionIDV2:\s*"[^"]*"`)
+		updatedCode = attrIDRegex.ReplaceAllString(updatedCode, fmt.Sprintf(`AttributionIDV2: "%s"`, data.AttributionID))
+	}
 
-	// Fix 3: Fix TextFormatPresetID to be "0" instead of empty string
-	textFormatPattern := regexp.MustCompile(`TextFormatPresetID:\s*""`)
-	content = textFormatPattern.ReplaceAllString(content, `TextFormatPresetID: "0"`)
-	fmt.Printf("🔧 Fixed TextFormatPresetID to be \"0\"\n")
+	// Update LSD token in header
+	if data.LSD != "" {
+		lsdHeaderRegex := regexp.MustCompile(`req\.Header\.Set\("x-fb-lsd",\s*"[^"]*"\)`)
+		updatedCode = lsdHeaderRegex.ReplaceAllString(updatedCode, fmt.Sprintf(`req.Header.Set("x-fb-lsd", "%s")`, data.LSD))
+	}
 
-	// Fix 4: Ensure WithTagsIDs is nil (not empty array)
-	withTagsPattern := regexp.MustCompile(`WithTagsIDs:\s*\[\]interface\{\}\{\}`)
-	content = withTagsPattern.ReplaceAllString(content, `WithTagsIDs: nil`)
-	fmt.Printf("🔧 Fixed WithTagsIDs to be nil\n")
+	// Update cookies
+	if data.Cookies != "" {
+		cookieRegex := regexp.MustCompile(`req\.Header\.Set\("Cookie",\s*"[^"]*"\)`)
+		updatedCode = cookieRegex.ReplaceAllString(updatedCode, fmt.Sprintf(`req.Header.Set("Cookie", "%s")`, data.Cookies))
+	}
 
-	// Fix 5: Ensure InlineActivities is empty array
-	inlineActivitiesPattern := regexp.MustCompile(`InlineActivities:\s*nil`)
-	content = inlineActivitiesPattern.ReplaceAllString(content, `InlineActivities: []interface{}{}`)
-	fmt.Printf("🔧 Fixed InlineActivities to be empty array\n")
-
-	// Fix 6: Remove any remaining ComposedText references (catch-all)
-	remainingComposedTextPattern := regexp.MustCompile(`(?s)ComposedText:\s*struct\s*\{[^}]*\}\s*\{[^}]*\}`)
-	content = remainingComposedTextPattern.ReplaceAllString(content, "")
-	fmt.Printf("🔧 Removed any remaining ComposedText references\n")
-
-	fmt.Printf("✅ Updated all variables JSON values and fixed structural issues\n")
-	return content
+	return updatedCode, nil
 }
 
-func buildCookieString(cookies map[string]string) string {
-	var cookiePairs []string
-	for key, value := range cookies {
-		cookiePairs = append(cookiePairs, fmt.Sprintf("%s=%s", key, value))
-	}
-	return strings.Join(cookiePairs, "; ")
-}
+// doubleEscapeForFmtSprintf converts URL-encoded strings to double-escaped format for fmt.Sprintf
+func doubleEscapeForFmtSprintf(value string) string {
+	// If the value is already URL-encoded, we need to double-escape the % characters
+	// so that fmt.Sprintf doesn't interpret them as format verbs
 
-func ensureProperFileStructure(content string) string {
-	// Ensure proper header section structure
-	headerSectionPattern := regexp.MustCompile(`// Set headers from the curl request[^\n]*\n([^\n]*\n)*?// Set cookies from the curl request`)
-	if !headerSectionPattern.MatchString(content) {
-		// If header section is malformed, fix it
-		content = strings.ReplaceAll(content, "// Set cookies from the curl request - empty placeholder", "\n	// Set cookies from the curl request - exact values")
+	// First, if it's not URL-encoded, encode it
+	if !strings.Contains(value, "%") {
+		value = url.QueryEscape(value)
 	}
 
-	return content
+	// Double-escape % characters for fmt.Sprintf
+	// %3A becomes %%3A, %2C becomes %%2C, etc.
+	doubleEscaped := strings.ReplaceAll(value, "%", "%%")
+
+	return doubleEscaped
 }
+
+// PrintCurlData prints the extracted data for debugging
+// func PrintCurlData(data *CurlData) {
+// 	fmt.Println("=== Extracted cURL Data ===")
+// 	fmt.Printf("User ID: %s\n", data.UserID)
+// 	fmt.Printf("Session ID: %s\n", data.SessionID)
+// 	fmt.Printf("Attribution ID: %s\n", data.AttributionID)
+// 	fmt.Printf("LSD Token: %s\n", data.LSD)
+// 	fmt.Printf("Composer Entry Point: %s\n", data.ComposerEntryPoint)
+// 	fmt.Printf("Group ID: %s\n", data.GroupID)
+// 	fmt.Printf("Message Text: %s\n", data.MessageText)
+// 	fmt.Printf("Photo IDs: %v\n", data.PhotoIDs)
+// 	fmt.Printf("Cookies: %s\n", data.Cookies)
+// 	fmt.Println("Headers:")
+// 	for key, value := range data.Headers {
+// 		fmt.Printf("  %s: %s\n", key, value)
+// 	}
+// 	fmt.Println("Form Data:")
+// 	for key, value := range data.FormData {
+// 		if len(value) > 100 {
+// 			fmt.Printf("  %s: %s...\n", key, value[:100])
+// 		} else {
+// 			fmt.Printf("  %s: %s\n", key, value)
+// 		}
+// 	}
+// 	fmt.Println("========================")
+// }
+
+// Example usage function
+// func ExampleUsage() {
+// 	// Save your cURL command to a file called "curl.txt" (keep it short!)
+// 	// Then call this function to update your Go code
+// 	err := UpdateCodeFromCurl("curl.txt", "post.go")
+// 	if err != nil {
+// 		fmt.Printf("Error: %v\n", err)
+// 		return
+// 	}
+
+// 	fmt.Println("Code updated successfully!")
+// }
+
+// UpdateCodeFromCurlString takes cURL as string and updates Go code file
+// func UpdateCodeFromCurlString(curlCommand string, goFilePath string) error {
+// 	// Parse cURL command
+// 	curlData, err := parseCurlCommand(curlCommand)
+// 	if err != nil {
+// 		return fmt.Errorf("error parsing cURL command: %v", err)
+// 	}
+
+// 	// Read existing Go file
+// 	goContent, err := os.ReadFile(goFilePath)
+// 	if err != nil {
+// 		return fmt.Errorf("error reading Go file '%s': %v", goFilePath, err)
+// 	}
+
+// 	// Update Go code with new values
+// 	updatedCode, err := updateCode(string(goContent), curlData)
+// 	if err != nil {
+// 		return fmt.Errorf("error updating Go code: %v", err)
+// 	}
+
+// 	// Write updated code back to file
+// 	err = os.WriteFile(goFilePath, []byte(updatedCode), 0644)
+// 	if err != nil {
+// 		return fmt.Errorf("error writing updated Go file '%s': %v", goFilePath, err)
+// 	}
+
+// 	fmt.Printf("✅ Successfully updated %s with fresh cURL values\n", goFilePath)
+// 	return nil
+// }
+
+// QuickUpdate is a helper function with very short file names
+// func QuickUpdate() {
+// 	err := UpdateCodeFromCurl("c.txt", "p.go")
+// 	if err != nil {
+// 		fmt.Printf("Error: %v\n", err)
+// 		return
+// 	}
+// 	fmt.Println("✅ Updated successfully!")
+// }
+
+// ParseAndPrintCurlData is a helper function to just parse and display data without updating files
+// func ParseAndPrintCurlData(curlFilePath string) error {
+// 	curlContent, err := ioutil.ReadFile(curlFilePath)
+// 	if err != nil {
+// 		return fmt.Errorf("error reading cURL file: %v", err)
+// 	}
+
+// 	curlData, err := parseCurlCommand(string(curlContent))
+// 	if err != nil {
+// 		return fmt.Errorf("error parsing cURL command: %v", err)
+// 	}
+
+// 	PrintCurlData(curlData)
+// 	return nil
+// }

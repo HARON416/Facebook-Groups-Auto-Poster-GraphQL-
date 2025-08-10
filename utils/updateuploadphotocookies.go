@@ -2,297 +2,229 @@ package utils
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"regexp"
-	"strings"
 )
 
-func UpdateUploadPhotoCookies() error {
-	// Read the curl request from the cookies file
-	curlRequest, err := readCurlRequest("cookies/uploadimagecookies.txt")
+// Update Facebook Image Upload function from curl command
+func UpdateImageUploadFunctionFromCurl(curlCommand, filePath string) error {
+	// 1. Read the original file
+	originalCode, err := os.ReadFile(filePath)
 	if err != nil {
-		return fmt.Errorf("error reading curl request: %w", err)
+		return fmt.Errorf("failed to read file %s: %w", filePath, err)
 	}
 
-	// Parse the curl request
-	parsedData, err := parseCurlRequest(curlRequest)
+	// 2. Extract values from curl command
+	config, err := extractImageUploadValuesFromCurl(curlCommand)
 	if err != nil {
-		return fmt.Errorf("error parsing curl request: %w", err)
+		return fmt.Errorf("failed to extract values from curl: %w", err)
 	}
 
-	// Update the uploadimage.go file with new credentials
-	err = updateUploadImageFile(parsedData)
+	// 3. Update the code
+	updatedCode := updateImageUploadGoCode(string(originalCode), config)
+
+	// 4. Create backup
+	backupPath := filePath + ".backup"
+	err = os.WriteFile(backupPath, originalCode, 0644)
 	if err != nil {
-		return fmt.Errorf("error updating uploadimage.go: %w", err)
+		return fmt.Errorf("failed to create backup: %w", err)
 	}
 
-	// Verify the update was successful
-	err = verifyUploadUpdate(parsedData)
+	// 5. Write updated code
+	err = os.WriteFile(filePath, []byte(updatedCode), 0644)
 	if err != nil {
-		return fmt.Errorf("verification failed: %w", err)
+		return fmt.Errorf("failed to write updated file: %w", err)
 	}
-	fmt.Println("🎉 Facebook Upload Photo cookies have been successfully updated!")
+
+	fmt.Printf("✅ Successfully updated %s\n", filePath)
+	fmt.Printf("📁 Backup saved as %s\n", backupPath)
+	fmt.Printf("🔄 Updated %d fields\n", len(config))
 
 	return nil
 }
 
-func verifyUploadUpdate(parsedData *CurlData) error {
-	// Read the updated file to verify changes
-	content, err := os.ReadFile("utils/uploadimage.go")
-	if err != nil {
-		return err
+// Extract all Facebook image upload values from curl command
+func extractImageUploadValuesFromCurl(curlCommand string) (map[string]string, error) {
+	config := make(map[string]string)
+
+	// Extract cookies from -b flag
+	cookieRegex := regexp.MustCompile(`-b\s+'([^']+)'`)
+	if matches := cookieRegex.FindStringSubmatch(curlCommand); len(matches) > 1 {
+		config["cookie"] = matches[1]
 	}
 
-	contentStr := string(content)
-
-	// Verify critical parameters were updated
-	criticalParams := []string{
-		"av", "__user", "fb_dtsg", "lsd", "jazoest",
-		"__req", "__rev", "__spin_r", "__spin_t",
+	// Extract user-agent
+	userAgentRegex := regexp.MustCompile(`-H\s+'user-agent:\s*([^']+)'`)
+	if matches := userAgentRegex.FindStringSubmatch(curlCommand); len(matches) > 1 {
+		config["user-agent"] = matches[1]
 	}
 
-	for _, param := range criticalParams {
-		if value, exists := parsedData.Data[param]; exists {
-			// Check if the parameter was updated in the file
-			expectedLine := fmt.Sprintf(`params.Add("%s", "%s")`, param, value)
-			if !strings.Contains(contentStr, expectedLine) {
-				return fmt.Errorf("critical parameter %s was not updated correctly", param)
+	// Extract sec-ch-ua
+	secChUARegex := regexp.MustCompile(`-H\s+'sec-ch-ua:\s*([^']+)'`)
+	if matches := secChUARegex.FindStringSubmatch(curlCommand); len(matches) > 1 {
+		config["sec-ch-ua"] = matches[1]
+	}
+
+	// Extract query parameters from the URL
+	urlRegex := regexp.MustCompile(`curl\s+'([^']+)'`)
+	if matches := urlRegex.FindStringSubmatch(curlCommand); len(matches) > 1 {
+		fullURL := matches[1]
+
+		//Parse URL to get query parameters
+		parsedURL, err := url.Parse(fullURL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse URL: %w", err)
+		}
+
+		queryParams := parsedURL.Query()
+
+		// Extract all the Facebook query parameter fields
+		fbQueryFields := []string{
+			"av", "__user", "__req", "__hs", "__ccg", "__rev", "__s", "__hsi",
+			"__dyn", "__csr", "__hsdp", "__hblp", "__sjsp", "fb_dtsg",
+			"jazoest", "lsd", "__spin_t", "__spin_r",
+		}
+
+		for _, field := range fbQueryFields {
+			if value := queryParams.Get(field); value != "" {
+				config[field] = value
 			}
 		}
 	}
 
-	// Verify cookies were updated
-	if parsedData.Cookies != "" {
-		expectedCookieLine := fmt.Sprintf(`req.Header.Set("Cookie", "%s")`, parsedData.Cookies)
-		if !strings.Contains(contentStr, expectedCookieLine) {
-			return fmt.Errorf("cookies were not updated correctly")
+	// Extract form data from --data-raw to get profile_id
+	dataRegex := regexp.MustCompile(`--data-raw\s+\$'([^']+)'`)
+	if matches := dataRegex.FindStringSubmatch(curlCommand); len(matches) > 1 {
+		formData := matches[1]
+
+		// Extract profile_id from the multipart form data
+		profileIDRegex := regexp.MustCompile(`name="profile_id".*?\\r\\n\\r\\n([^\\]+)`)
+		if profileMatches := profileIDRegex.FindStringSubmatch(formData); len(profileMatches) > 1 {
+			config["profile_id"] = profileMatches[1]
 		}
 	}
 
-	// Verify critical headers were updated
-	criticalHeaders := []string{"Accept", "Origin", "User-Agent"}
-	for _, header := range criticalHeaders {
-		lowerHeader := strings.ToLower(header)
-		if headerValue, exists := parsedData.Headers[lowerHeader]; exists {
-			expectedHeaderLine := fmt.Sprintf(`req.Header.Set("%s", "%s")`, header, headerValue)
-			if !strings.Contains(contentStr, expectedHeaderLine) {
-				return fmt.Errorf("critical header %s was not updated correctly", header)
-			}
+	// Validate we got the essential fields
+	essential := []string{"av", "__user", "cookie", "lsd", "profile_id"}
+	for _, field := range essential {
+		if config[field] == "" {
+			return nil, fmt.Errorf("missing essential field: %s", field)
 		}
 	}
 
-	fmt.Println("🔍 Verification passed: All critical parameters and headers updated successfully!")
-	return nil
+	return config, nil
 }
 
-func updateUploadImageFile(parsedData *CurlData) error {
-	// Read the current uploadimage.go file
-	content, err := os.ReadFile("utils/uploadimage.go")
+// Update the Go code with new values for image upload function
+func updateImageUploadGoCode(originalCode string, config map[string]string) string {
+	updatedCode := originalCode
+
+	// Update query parameter fields in params.Add() calls
+	queryFields := []string{
+		"av", "__user", "__req", "__hs", "__ccg", "__rev", "__s", "__hsi",
+		"__dyn", "__csr", "__hsdp", "__hblp", "__sjsp", "fb_dtsg",
+		"jazoest", "lsd", "__spin_t", "__spin_r",
+	}
+
+	for _, field := range queryFields {
+		if value, exists := config[field]; exists {
+			// Handle URL-encoded values (like fb_dtsg)
+			decodedValue, err := url.QueryUnescape(value)
+			if err != nil {
+				decodedValue = value // Use original if decoding fails
+			}
+
+			pattern := fmt.Sprintf(`params\.Add\("%s", "[^"]+"\)`, regexp.QuoteMeta(field))
+			replacement := fmt.Sprintf(`params.Add("%s", "%s")`, field, decodedValue)
+			re := regexp.MustCompile(pattern)
+			updatedCode = re.ReplaceAllString(updatedCode, replacement)
+		}
+	}
+
+	// Update profile_id in WriteField call
+	if profileID, exists := config["profile_id"]; exists {
+		re := regexp.MustCompile(`writer\.WriteField\("profile_id", "[^"]+"\)`)
+		replacement := fmt.Sprintf(`writer.WriteField("profile_id", "%s")`, profileID)
+		updatedCode = re.ReplaceAllString(updatedCode, replacement)
+	}
+
+	// Update headers
+	if cookie, exists := config["cookie"]; exists {
+		re := regexp.MustCompile(`req\.Header\.Set\("Cookie", "[^"]+"\)`)
+		replacement := fmt.Sprintf(`req.Header.Set("Cookie", "%s")`, cookie)
+		updatedCode = re.ReplaceAllString(updatedCode, replacement)
+	}
+
+	if userAgent, exists := config["user-agent"]; exists {
+		re := regexp.MustCompile(`req\.Header\.Set\("User-Agent", "[^"]+"\)`)
+		replacement := fmt.Sprintf(`req.Header.Set("User-Agent", "%s")`, userAgent)
+		updatedCode = re.ReplaceAllString(updatedCode, replacement)
+	}
+
+	if secChUA, exists := config["sec-ch-ua"]; exists {
+		re := regexp.MustCompile(`req\.Header\.Set\("Sec-Ch-Ua", ` + "`" + `[^` + "`" + `]+` + "`" + `\)`)
+		replacement := fmt.Sprintf(`req.Header.Set("Sec-Ch-Ua", `+"`"+`%s`+"`"+`)`, secChUA)
+		updatedCode = re.ReplaceAllString(updatedCode, replacement)
+	}
+
+	return updatedCode
+}
+
+// Command line interface
+// func main() {
+// 	if len(os.Args) < 3 {
+// 		fmt.Println("Usage: go run image_upload_updater.go '<curl-command>' <go-file-path>")
+// 		fmt.Println()
+// 		fmt.Println("Example:")
+// 		fmt.Println(`go run image_upload_updater.go 'curl https://upload.facebook.com/ajax/react_composer/attachments/photo/upload...' image_upload.go`)
+// 		os.Exit(1)
+// 	}
+
+// 	curlCommand := os.Args[1]
+// 	filePath := os.Args[2]
+
+// 	err := UpdateImageUploadFromCurl(curlCommand, filePath)
+// 	if err != nil {
+// 		log.Fatalf("❌ Update failed: %v", err)
+// 	}
+
+// 	fmt.Println("🎉 Image upload function updated successfully!")
+// }
+
+// Alternative: Update from string (no file needed)
+func UpdateImageUploadCodeFromCurlAndOriginalCode(curlCommand, originalCode string) (string, error) {
+	config, err := extractImageUploadValuesFromCurl(curlCommand)
+	if err != nil {
+		return "", err
+	}
+
+	updatedCode := updateImageUploadGoCode(originalCode, config)
+	return updatedCode, nil
+}
+
+// Quick extraction function for debugging
+func ExtractImageUploadValues(curlCommand string) error {
+	config, err := extractImageUploadValuesFromCurl(curlCommand)
 	if err != nil {
 		return err
 	}
 
-	contentStr := string(content)
+	fmt.Println("📋 Extracted values from curl command:")
+	fmt.Printf("   User ID: %s\n", config["__user"])
+	fmt.Printf("   Profile ID: %s\n", config["profile_id"])
+	fmt.Printf("   LSD: %s\n", config["lsd"])
+	fmt.Printf("   FB DTSG: %s\n", config["fb_dtsg"])
+	fmt.Printf("   Cookie length: %d characters\n", len(config["cookie"]))
 
-	fmt.Printf("🔍 DEBUG: Starting update with %d query parameters and %d headers\n", len(parsedData.Data), len(parsedData.Headers))
-
-	// Update cookies
-	if parsedData.Cookies != "" {
-		cookiePattern := regexp.MustCompile(`req\.Header\.Set\("Cookie", "[^"]*"\)`)
-		newCookieLine := fmt.Sprintf(`req.Header.Set("Cookie", "%s")`, parsedData.Cookies)
-		oldContent := contentStr
-		contentStr = cookiePattern.ReplaceAllString(contentStr, newCookieLine)
-		if oldContent == contentStr {
-			fmt.Printf("⚠️  WARNING: No match found for cookies\n")
+	// Show all extracted fields
+	fmt.Println("\n🔍 All extracted fields:")
+	for key, value := range config {
+		if len(value) > 50 {
+			fmt.Printf("   %s: %s... (length: %d)\n", key, value[:50], len(value))
 		} else {
-			fmt.Printf("✅ Updated cookies: %s\n", parsedData.Cookies[:min(50, len(parsedData.Cookies))])
+			fmt.Printf("   %s: %s\n", key, value)
 		}
-	}
-
-	// Update query parameters - ALL parameters from the curl request
-	queryParamUpdates := map[string]string{
-		"av":          parsedData.Data["av"],
-		"__aaid":      parsedData.Data["__aaid"],
-		"__user":      parsedData.Data["__user"],
-		"__a":         parsedData.Data["__a"],
-		"__req":       parsedData.Data["__req"],
-		"__hs":        parsedData.Data["__hs"],
-		"dpr":         parsedData.Data["dpr"],
-		"__ccg":       parsedData.Data["__ccg"],
-		"__rev":       parsedData.Data["__rev"],
-		"__s":         parsedData.Data["__s"],
-		"__hsi":       parsedData.Data["__hsi"],
-		"__dyn":       parsedData.Data["__dyn"],
-		"__csr":       parsedData.Data["__csr"],
-		"__hsdp":      parsedData.Data["__hsdp"],
-		"__hblp":      parsedData.Data["__hblp"],
-		"__sjsp":      parsedData.Data["__sjsp"],
-		"__comet_req": parsedData.Data["__comet_req"],
-		"fb_dtsg":     parsedData.Data["fb_dtsg"],
-		"jazoest":     parsedData.Data["jazoest"],
-		"lsd":         parsedData.Data["lsd"],
-		"__spin_r":    parsedData.Data["__spin_r"],
-		"__spin_b":    parsedData.Data["__spin_b"],
-		"__spin_t":    parsedData.Data["__spin_t"],
-		"__crn":       parsedData.Data["__crn"],
-	}
-
-	for key, value := range queryParamUpdates {
-		// Update even if value is empty (to replace empty placeholders)
-		pattern := regexp.MustCompile(fmt.Sprintf(`params\.Add\("%s", "[^"]*"\)`, key))
-		newLine := fmt.Sprintf(`params.Add("%s", "%s")`, key, value)
-		oldContent := contentStr
-		contentStr = pattern.ReplaceAllString(contentStr, newLine)
-		if oldContent == contentStr {
-			fmt.Printf("⚠️  WARNING: No match found for query parameter: %s\n", key)
-		} else {
-			fmt.Printf("✅ Updated query parameter: %s = %s\n", key, value[:min(20, len(value))])
-		}
-	}
-
-	// Update form data profile_id
-	if userID, exists := parsedData.Data["av"]; exists {
-		profileIDPattern := regexp.MustCompile(`writer\.WriteField\("profile_id", "[^"]*"\)`)
-		newProfileIDLine := fmt.Sprintf(`writer.WriteField("profile_id", "%s")`, userID)
-		oldContent := contentStr
-		contentStr = profileIDPattern.ReplaceAllString(contentStr, newProfileIDLine)
-		if oldContent == contentStr {
-			fmt.Printf("⚠️  WARNING: No match found for profile_id\n")
-		} else {
-			fmt.Printf("✅ Updated profile_id: %s\n", userID)
-		}
-	}
-
-	// Update headers from curl request
-	headerUpdates := map[string]string{
-		"Accept":          parsedData.Headers["accept"],
-		"Accept-Language": parsedData.Headers["accept-language"],
-		"Origin":          parsedData.Headers["origin"],
-		"Referer":         parsedData.Headers["referer"],
-		"User-Agent":      parsedData.Headers["user-agent"],
-	}
-
-	for headerName, headerValue := range headerUpdates {
-		// Try to update existing headers (both empty placeholders and hardcoded values)
-		emptyPattern := regexp.MustCompile(fmt.Sprintf(`req\.Header\.Set\("%s", ""\)`, headerName))
-		existingPattern := regexp.MustCompile(fmt.Sprintf(`req\.Header\.Set\("%s", "[^"]*"\)`, headerName))
-
-		oldContent := contentStr
-		updated := false
-
-		// Use backticks for headers that contain quotes to avoid escaping issues
-		if strings.Contains(headerValue, `"`) {
-			newHeaderLine := fmt.Sprintf(`req.Header.Set("%s", `+"`%s`"+`)`, headerName, headerValue)
-			// Try empty placeholder first
-			contentStr = emptyPattern.ReplaceAllString(contentStr, newHeaderLine)
-			if oldContent != contentStr {
-				updated = true
-			} else {
-				// Try existing hardcoded value
-				contentStr = existingPattern.ReplaceAllString(contentStr, newHeaderLine)
-				if oldContent != contentStr {
-					updated = true
-				}
-			}
-		} else {
-			newHeaderLine := fmt.Sprintf(`req.Header.Set("%s", "%s")`, headerName, headerValue)
-			// Try empty placeholder first
-			contentStr = emptyPattern.ReplaceAllString(contentStr, newHeaderLine)
-			if oldContent != contentStr {
-				updated = true
-			} else {
-				// Try existing hardcoded value
-				contentStr = existingPattern.ReplaceAllString(contentStr, newHeaderLine)
-				if oldContent != contentStr {
-					updated = true
-				}
-			}
-		}
-
-		if !updated {
-			fmt.Printf("⚠️  WARNING: No match found for header: %s\n", headerName)
-		} else {
-			fmt.Printf("✅ Updated header: %s = %s\n", headerName, headerValue[:min(20, len(headerValue))])
-		}
-	}
-
-	// Add missing headers that are required (get from parsed curl request)
-	missingHeaders := map[string]string{
-		"Priority":           parsedData.Headers["priority"],
-		"Sec-Ch-Ua":          parsedData.Headers["sec-ch-ua"],
-		"Sec-Ch-Ua-Mobile":   parsedData.Headers["sec-ch-ua-mobile"],
-		"Sec-Ch-Ua-Platform": parsedData.Headers["sec-ch-ua-platform"],
-		"Sec-Fetch-Dest":     parsedData.Headers["sec-fetch-dest"],
-		"Sec-Fetch-Mode":     parsedData.Headers["sec-fetch-mode"],
-		"Sec-Fetch-Site":     parsedData.Headers["sec-fetch-site"],
-	}
-
-	for headerName, headerValue := range missingHeaders {
-		// Check if header already exists (both with quotes and backticks)
-		existingPattern := regexp.MustCompile(fmt.Sprintf(`req\.Header\.Set\("%s", "[^"]*"\)`, headerName))
-		backtickPattern := regexp.MustCompile(fmt.Sprintf(`req\.Header\.Set\("%s", `+"`[^`]*`"+`\)`, headerName))
-
-		oldContent := contentStr
-		updated := false
-
-		if existingPattern.MatchString(contentStr) || backtickPattern.MatchString(contentStr) {
-			// Update existing header
-			if strings.Contains(headerValue, `"`) {
-				newHeaderLine := fmt.Sprintf(`req.Header.Set("%s", `+"`%s`"+`)`, headerName, headerValue)
-				contentStr = existingPattern.ReplaceAllString(contentStr, newHeaderLine)
-				contentStr = backtickPattern.ReplaceAllString(contentStr, newHeaderLine)
-			} else {
-				newHeaderLine := fmt.Sprintf(`req.Header.Set("%s", "%s")`, headerName, headerValue)
-				contentStr = existingPattern.ReplaceAllString(contentStr, newHeaderLine)
-				contentStr = backtickPattern.ReplaceAllString(contentStr, newHeaderLine)
-			}
-			if oldContent != contentStr {
-				updated = true
-			}
-		}
-
-		if !updated {
-			// Add new header after the existing headers
-			insertPoint := `req.Header.Set("Sec-Fetch-Site", "same-site")`
-			if strings.Contains(headerValue, `"`) {
-				newHeaderLine := fmt.Sprintf(`	req.Header.Set("%s", `+"`%s`"+`)`, headerName, headerValue)
-				contentStr = strings.Replace(contentStr, insertPoint, insertPoint+"\n"+newHeaderLine, 1)
-			} else {
-				newHeaderLine := fmt.Sprintf(`	req.Header.Set("%s", "%s")`, headerName, headerValue)
-				contentStr = strings.Replace(contentStr, insertPoint, insertPoint+"\n"+newHeaderLine, 1)
-			}
-			if oldContent != contentStr {
-				updated = true
-			}
-		}
-
-		if updated {
-			fmt.Printf("✅ Updated/Added header: %s = %s\n", headerName, headerValue)
-		} else {
-			fmt.Printf("⚠️  WARNING: Could not update/add header: %s\n", headerName)
-		}
-	}
-
-	// Remove problematic headers that should not be present
-	headersToRemove := []string{
-		`req.Header.Set("Accept-Encoding", "")`,
-		`req.Header.Set("Connection", "")`,
-		`req.Header.Set("TE", "")`,
-	}
-
-	for _, headerToRemove := range headersToRemove {
-		oldContent := contentStr
-		contentStr = strings.Replace(contentStr, headerToRemove+"\n", "", 1)
-		contentStr = strings.Replace(contentStr, headerToRemove, "", 1)
-		if oldContent != contentStr {
-			fmt.Printf("✅ Removed problematic header: %s\n", headerToRemove)
-		}
-	}
-
-	// Write the updated content back to the file
-	err = os.WriteFile("utils/uploadimage.go", []byte(contentStr), 0644)
-	if err != nil {
-		return err
 	}
 
 	return nil
