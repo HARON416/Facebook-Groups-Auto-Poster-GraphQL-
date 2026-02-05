@@ -1,0 +1,24 @@
+curl 'https://web.facebook.com/api/graphql/' \
+  -H 'accept: */*' \
+  -H 'accept-language: en-US,en;q=0.9' \
+  -H 'content-type: application/x-www-form-urlencoded' \
+  -b 'presence=C%7B%22t3%22%3A%5B%5D%2C%22utc3%22%3A1770287884029%2C%22v%22%3A1%7D; fr=1bvoWo83zkmxc4IEK.AWdJclYG0AtkYMqHgAXrnZ4iJEHz_1ma_ne38BHkhgeuJ3sLDco.BphGrT..AAA.0.0.BphHMB.AWcPoFbKCgy99LYXCbb-L9__5fc; xs=46%3ABPGbc2TG4BKVbw%3A2%3A1770205152%3A-1%3A-1%3A%3AAcxDuku0cln7HABMinDAbdcP6rdbIvF4hZexKh_P8Q; c_user=61560452168137; wd=1920x993; sb=XCmDaUWoCvKoH2gQzlAaW16k; ps_n=1; ps_l=1; locale=en_GB; datr=WymDaeo7Di9PRDl_gQfjsth2' \
+  -H 'origin: https://web.facebook.com' \
+  -H 'priority: u=1, i' \
+  -H 'referer: https://web.facebook.com/groups/joins/?nav_source=tab&ordering=viewer_added' \
+  -H 'sec-ch-prefers-color-scheme: light' \
+  -H 'sec-ch-ua: "Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"' \
+  -H 'sec-ch-ua-full-version-list: "Not(A:Brand";v="8.0.0.0", "Chromium";v="144.0.7559.132", "Google Chrome";v="144.0.7559.132"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-model: ""' \
+  -H 'sec-ch-ua-platform: "Linux"' \
+  -H 'sec-ch-ua-platform-version: ""' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-origin' \
+  -H 'user-agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36' \
+  -H 'x-asbd-id: 359341' \
+  -H 'x-fb-friendly-name: GroupsCometAllJoinedGroupsSectionPaginationQuery' \
+  -H 'x-fb-lsd: y3Heyd_nfQKips4PR8LLmg' \
+  --data-raw 'av=61560452168137&__aaid=0&__user=61560452168137&__a=1&__req=k&__hs=20489.HYP%3Acomet_pkg.2.1...0&dpr=1&__ccg=GOOD&__rev=1032973305&__s=veh9ep%3A3ehwu6%3A2k8j5c&__hsi=7603328554382455454&__dyn=7xeUjGU5a5Q1ryaxG4Vp41twWwIxu13wFwhUngS3q2ibwNw9G2Sawba1DwUx60GE3Qwb-q7oc81EEc87m221Fwgo9oO0n24oaEnxO0Bo7O2l2Utwqo31wiE4u9x-3m1mzXw8W58jwGzEaE5e3ym2SU4i5oe8cEW4-5pUfEe88o4Wm7-2K0-obUG2-azqwt8eo5d0bS1LyUaUbGxe6Uak0zU8oC1Hg6C13xecwBwWzUlwEKufxamEbbxG1fBG2-0P8461wweW2K3abxG6E2Uw&__csr=g8cdPJP43krazTOOvtkB9b9v94YlcB9dqib9tFIGlkGltbjsBcJKAznnAB9TTnOXaAzlOlQjGBiAliAjWhV9et4qh9rBB8LheHCXAF4CDrx6fBBADGF8Hxmm9z5FoyeCgmCAyt6CG9z8Gq4VVQ7WhWzbzuFpGyHyFQl5AhHwzgx3UjxG4Elx28yUC6ECbxvyei48hy8frwIG69UC18UydzEym9xi8ximcwxBz8qzUK369BDUC7Usxq1jxq6UgzopxG4U-u68oGczo8oKi5Ub898d852icxCi1gK1VKq4omgryEb9oO3C08bw8O5opyo3Nw890kE2Iw8e3Ew8EOp0byqA2O2W1Ixq08JyV8y0uWgyF0go2vwu84ACA1ng2bwaKEgxe1uwgo06a20nC069E03Zp82C2V07Jxa06NE44M2kw1B60cso1n80Hu0aQw5qgkwKgco0mGg0i3w4TAw2v828o0zG0eua01c1w1uO02C509a0cLAS2i04W40syt0329U&__hsdp=gN7EGc6GxtxEgGp3448ggWWAez9Gx9x95EySxaWaADuyayGwBGMBh3EGi8wk2D998Gep8xp2Iy8G293Jy38xqINkgVqskzmxIl3lS5P8f416sYP11spq31j5brQz2VNiD85pBx2dwyCFetaWIxkyMwvAnz8Gn88KWhVmhCko5EhYkUWaVVQmfxeh2G4bhT2YUGW1gh8l8bhp1nFzIEGEA9QoyCcQQ4rBDAjhoO4bCCHxCdoCmmjOBgjzWK3Cmh2EGdGUUazwIUlD8h6ZpfUhAoO1qe6Q8x6U8Fbz8iByV5zV8hDZSbwsoiAx-788ouhUy58kDh1ggzEBa28MuwnUbpp8pJNgb8590BhQfypFEkw9t0FxKrDCc1syU4i1dwoU7W18wqo2MgsxKU3lzo3Fwxwem4iU2twbEU2xw4mxq68-1dAw8Ja0x8aomwBa0yo2Pwbu0Ao1bWw5pwUwk86G0Z8aU1689E9E0yK4po0JG0HE0LG0p-026y0K80MK0u62m0GU1PU1U80BO15wa60AU720hO0rK0j20VE1VE3Jwe-1Iw&__hblp=0roaU461wwjE38wkFo4d1e3_wAw47wCyoK0WU5q1FwlqCwWxy0ma1vBwKxS4UdUrxe68do2LyovxO1Mwk82nw7YwCxKcw4bwoU1co6G16xO6Xwm8985udwb-2C0wE1aUR0bO0Fo3Rwk8-1dxG3K1xw8G5E2Pw1ce1gwvEfo1REgwCxa4U2ywko3LwhEhBw6Dwo82_x60HE5Kfw5EwHwlU2xwau0ZU0NG1Nx2680RS0MpU66E981zoduWwdi1xwc20kO0B89o2Hwbu0gOaxW2u0_o2rwk8K0U87i0Go4m0Eo2jws89rwfa0rK0j20VE1gU5S14wcC2e2a0P8vwj80Bi&__sjsp=gN7EGc6GxtxEgGpiAdEggWWAez9Gzkoihq8J22bIxRuyayGwBGMBh3EGi8wk2H99rGy6iGmgHmyax-j8h2j8xqICl49gxYgytEr5gGDtxsO3N0hDfcMgn6mwMsxiDQz2VNbD87UuwWCG2SvzEGnyXKAdp6phw5Su0IUUwtwKzU4Scw5XwCwNwd6U128vw9C028y04tU4Si&__comet_req=15&fb_dtsg=NAfuSprIlcDiEmYHpzgljla5ZVglRpG85AR5WW58tsxXKp5tr5VWpjw%3A46%3A1770205152&jazoest=25720&lsd=y3Heyd_nfQKips4PR8LLmg&__spin_r=1032973305&__spin_b=trunk&__spin_t=1770287881&__crn=comet.fbweb.CometGroupsJoinsRoute&fb_api_caller_class=RelayModern&fb_api_req_friendly_name=GroupsCometAllJoinedGroupsSectionPaginationQuery&server_timestamps=true&variables=%7B%22count%22%3A20%2C%22cursor%22%3A%22AQHS7jrSVGksw0EOG5CPrI_tkdgmpzs36K9uicvOVTAjJCsqe9EUGBs00B1-xoTavnKG9FSL30LmtljMLlKjiofGDg%22%2C%22ordering%22%3A%5B%22viewer_added%22%5D%2C%22scale%22%3A1%7D&doc_id=9974006939348139'
+
