@@ -52,6 +52,12 @@ func escapeForDollarQuote(s string) string {
 }
 
 func GetUploadImageAndCreatePostCurls(page *rod.Page) (string, string) {
+	// Automatically accept all JavaScript dialogs (e.g., "Leave site?" confirmations)
+	go page.EachEvent(func(e *proto.PageJavascriptDialogOpening) bool {
+		_ = proto.PageHandleJavaScriptDialog{Accept: true}.Call(page)
+		return false // continue listening for more dialogs
+	})()
+
 	url := "https://web.facebook.com/groups/1481181995617674"
 	page = page.MustNavigate(url).MustWaitLoad().MustWaitDOMStable()
 	page.Activate()
@@ -172,18 +178,24 @@ func GetUploadImageAndCreatePostCurls(page *rod.Page) (string, string) {
 
 	go router.Run()
 
+	fmt.Println(len(page.MustElements(`input[accept="image/*,image/heif,image/heic,video/*,video/mp4,video/x-m4v,video/x-matroska,.mkv"]`)))
+
 	if dialog.MustHas(`input[type="file"]`) {
 		fmt.Println("Dialog has file input")
 		dialog.MustElement(`input[type="file"]`).MustSetFiles(postImagePaths...)
+	} else if page.MustHas(`input[accept="image/*,image/heif,image/heic,video/*,video/mp4,video/x-m4v,video/x-matroska,.mkv"]`) {
+		page.MustElement(`input[accept="image/*,image/heif,image/heic,video/*,video/mp4,video/x-m4v,video/x-matroska,.mkv"]`).MustSetFiles(postImagePaths...)
 	} else {
 		fmt.Println("Dialog does not have file input")
 		if dialog.MustHas(`div[aria-label="Photo/video"]`) {
 			dialog.MustElement(`div[aria-label="Photo/video"]`).MustClick()
 			dialog.MustElement(`input[type="file"]`).MustSetFiles(postImagePaths...)
-			fmt.Println("Images set")
+
 		} else {
+
 			fmt.Println("Dialog does not have photo/video element")
 			return "", ""
+
 		}
 	}
 
@@ -330,6 +342,10 @@ func GetUploadImageAndCreatePostCurls(page *rod.Page) (string, string) {
 
 	for range 120 {
 		if dialog.MustVisible() {
+			if strings.Contains(dialog.MustText(), "We limit") {
+				fmt.Println("Hit posting limit. Please wait and try again later.")
+				return "", ""
+			}
 			fmt.Println("Posting...")
 			time.Sleep(2 * time.Second)
 			continue

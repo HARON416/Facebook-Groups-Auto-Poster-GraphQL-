@@ -34,12 +34,8 @@ func loginToFacebook() (*rod.Browser, *rod.Page) {
 
 	page := browser.MustPage("https://web.facebook.com/").MustWindowMaximize().MustWaitLoad()
 
-	pageTile := page.MustInfo().Title
-
-	fmt.Println("Page Title:", pageTile)
-
 	for {
-		if pageTile == "Facebook – log in or sign up" || page.MustHas(`form[data-testid="royal_login_form"]`) || strings.Contains(page.MustHTML(), "Log in to Facebook") || strings.Contains(page.MustInfo().URL, "two_step_verification/authentication/") {
+		if page.MustInfo().Title == "Facebook – log in or sign up" || page.MustHas(`form[data-testid="royal_login_form"]`) || strings.Contains(page.MustHTML(), "Log in to Facebook") || strings.Contains(page.MustInfo().URL, "two_step_verification/authentication/") {
 			fmt.Println("Please login to Facebook")
 			time.Sleep(10 * time.Second)
 		} else {
