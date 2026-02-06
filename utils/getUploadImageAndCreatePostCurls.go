@@ -201,7 +201,13 @@ func GetUploadImageAndCreatePostCurls(page *rod.Page) (string, string) {
 
 	fmt.Println("Images inserted")
 
-	dialog.MustElement(`div[role="textbox"][contenteditable="true"]`).MustInput(post)
+	if dialog.MustHas(`div[role="textbox"][contenteditable="true"]`) {
+		fmt.Println("Dialog has textbox for description")
+		dialog.MustElement(`div[role="textbox"][contenteditable="true"]`).MustInput(post)
+	} else {
+		fmt.Println("Dialog does not have textbox, trying alternative selector")
+		page.MustElement(`div[aria-placeholder="Create a public post…"]`).MustInput(post)
+	}
 
 	fmt.Println("Description inserted")
 
@@ -334,9 +340,13 @@ func GetUploadImageAndCreatePostCurls(page *rod.Page) (string, string) {
 		}
 	}
 
-	btn := dialog.MustElement(`div[aria-label="Post"]`)
-
-	btn.MustClick()
+	if dialog.MustHas(`div[aria-label="Post"]`) {
+		fmt.Println("Dialog has Post button")
+		dialog.MustElement(`div[aria-label="Post"]`).MustClick()
+	} else {
+		fmt.Println("Dialog does not have Post button, trying page level selector")
+		page.MustElement(`div[aria-label="Post"]`).MustClick()
+	}
 
 	fmt.Println("Post button clicked")
 
