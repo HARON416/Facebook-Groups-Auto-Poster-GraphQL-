@@ -4,6 +4,8 @@ import (
 	"autoposter/utils"
 	"fmt"
 	"math/rand/v2"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -12,30 +14,27 @@ import (
 )
 
 func loginToFacebook() (*rod.Browser, *rod.Page) {
-	dir := "./chrome"
+	// Get absolute path to make user data dir unique per project
+	cwd, _ := os.Getwd()
+	dir := filepath.Join(cwd, "browser")
 
-	// u := launcher.New().UserDataDir(dir).Leakless(true).NoSandbox(true).Headless(true).MustLaunch()
+	url := "https://web.facebook.com/"
 
-	// browser := rod.New().ControlURL(u).MustConnect().NoDefaultDevice()
-
-	// Create a more transparent launcher configuration
-	l := launcher.NewUserMode().
-		Leakless(false).  // Disable leakless mode which can trigger security
-		NoSandbox(false). // Enable sandbox for better security
-		Headless(false).  // Keep visible for transparency
-		Devtools(false).  // Disable devtools for production
-		UserDataDir(dir). // Use a local directory for user data
+	u := launcher.NewUserMode().
+		Leakless(true).
+		NoSandbox(true).
+		Headless(false).
+		Devtools(false).
+		UserDataDir(dir).
+		Set("disable-notifications").
 		MustLaunch()
 
-	browser := rod.New().
-		ControlURL(l).
-		MustConnect().
-		NoDefaultDevice()
+	browser := rod.New().ControlURL(u).MustConnect().NoDefaultDevice()
 
-	page := browser.MustPage("https://web.facebook.com/").MustWindowMaximize().MustWaitLoad()
+	page := browser.MustPage(url).MustWaitLoad().MustWaitDOMStable().MustWindowMaximize()
 
 	for {
-		if page.MustInfo().Title == "Facebook – log in or sign up" || page.MustHas(`form[data-testid="royal_login_form"]`) || strings.Contains(page.MustHTML(), "Log in to Facebook") || strings.Contains(page.MustInfo().URL, "two_step_verification/authentication/") {
+		if page.MustInfo().Title == "Facebook – log in or sign up" || page.MustHas(`form[data-testid="royal_login_form"]`) || strings.Contains(page.MustHTML(), "Log in to Facebook") || strings.Contains(page.MustInfo().URL, "two_step_verification/authentication/") || strings.Contains(page.MustInfo().URL, "verification") {
 			fmt.Println("Please login to Facebook")
 			time.Sleep(10 * time.Second)
 		} else {
