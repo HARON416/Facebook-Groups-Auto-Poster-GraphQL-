@@ -14,9 +14,20 @@ import (
 )
 
 func loginToFacebook() (*rod.Browser, *rod.Page) {
-	// Get absolute path to make user data dir unique per project
+	// Get current folder name as account identifier
 	cwd, _ := os.Getwd()
-	dir := filepath.Join(cwd, "browser")
+	accountName := filepath.Base(cwd) // Uses folder name
+
+	dir := filepath.Join(cwd, "browser_profile") // Consistent profile per folder
+
+	hash := 0
+	for _, c := range accountName {
+		hash = hash*31 + int(c)
+	}
+
+	port := 9222 + (hash % 5000)
+
+	fmt.Printf("Starting browser - Account: %s, Port: %d\n", accountName, port)
 
 	url := "https://web.facebook.com/"
 
@@ -26,6 +37,7 @@ func loginToFacebook() (*rod.Browser, *rod.Page) {
 		Headless(false).
 		Devtools(false).
 		UserDataDir(dir).
+		Set("remote-debugging-port", fmt.Sprintf("%d", port)).
 		Set("disable-notifications").
 		MustLaunch()
 
@@ -185,7 +197,7 @@ func main() {
 		}
 
 		fmt.Println()
-		time.Sleep(2 * time.Minute)
+		time.Sleep(1 * time.Minute)
 	}
 
 	// Final summary
