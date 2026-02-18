@@ -47,9 +47,9 @@ By default, Autoposter looks for `./items`. Override with:
 Example:
 
 ```bash
-./autoposter -items /home/user/Downloads/Phones
+go run . -items /home/user/Downloads/Phones
 # or
-ITEMS_PATH=/home/user/Downloads/Phones ./autoposter
+ITEMS_PATH=/home/user/Downloads/Phones go run .
 ```
 
 ## Login Flow
