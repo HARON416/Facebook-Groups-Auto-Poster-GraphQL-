@@ -2,6 +2,7 @@ package main
 
 import (
 	"autoposter/utils"
+	"flag"
 	"fmt"
 	"math/rand/v2"
 	"os"
@@ -59,8 +60,20 @@ func loginToFacebook() (*rod.Browser, *rod.Page) {
 }
 
 func main() {
+	// Configurable items path: -items flag or ITEMS_PATH env (default: ./items)
+	itemsPath := flag.String("items", "", "Path to items directory (subdirs with description.txt + images). Defaults to ITEMS_PATH env or ./items")
+	flag.Parse()
+	if *itemsPath == "" {
+		*itemsPath = os.Getenv("ITEMS_PATH")
+	}
+	if *itemsPath == "" {
+		*itemsPath = "./items"
+	}
+	*itemsPath, _ = filepath.Abs(*itemsPath)
+	fmt.Printf("📁 Items path: %s\n", *itemsPath)
+
 	// Extract items once before the loop to ensure even distribution
-	items, err := utils.ExtractItems()
+	items, err := utils.ExtractItems(*itemsPath)
 	if err != nil {
 		fmt.Printf("❌ Error extracting items: %v\n", err)
 		return

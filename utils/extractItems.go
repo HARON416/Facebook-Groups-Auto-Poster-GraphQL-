@@ -15,8 +15,7 @@ type Item struct {
 	ImagePaths  []string
 }
 
-func ExtractItems() ([]Item, error) {
-	path := "/home/kibet/Downloads/Phones"
+func ExtractItems(path string) ([]Item, error) {
 	var items []Item
 	var allImagePaths []string
 

@@ -1,1 +1,7 @@
 chrome/
+browser_profile/
+graphql_curl.txt
+graphql_curls.txt
+uploads_curl.txt
+graphql_requests.jsonl
+uploads.jsonl
