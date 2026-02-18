@@ -1,6 +1,6 @@
 # Autoposter
 
-Automated posting to Facebook Groups. Uses browser automation (go-rod) to capture Facebook's API requests, then replays them via HTTP to post product listings with images across your joined groups.
+Reverse-engineers Facebook's GraphQL API to post product listings (text + images) to your joined groups. It uses browser automation to capture the real API requests, auto-updates the curl commands with fresh cookies and headers, then replays them over HTTP. You just run it and it handles the rest—log in once when prompted, then sit back while it posts across your groups.
 
 ## Requirements
 
@@ -70,6 +70,8 @@ ITEMS_PATH=/home/user/Downloads/Phones ./autoposter
 
 ## How It Works
 
+Autoposter reverse engineers Facebook's private GraphQL API (groups fetch, photo upload, post creation) and automatically keeps the captured curl commands up to date with your session.
+
 1. **Capture phase**
    - Opens a visible Chrome window
    - Waits for you to log in to Facebook
@@ -113,6 +115,12 @@ These files are created during the capture phase and contain session data. Do no
 |           | `ITEMS_PATH` |           |
 | Target    | (hardcoded)  | 250 posts |
 | Delay     | (hardcoded)  | 1 min     |
+
+## Support & Customizations
+
+- **WhatsApp**: +254718448461
+- **Email**: haronkibetrutoh@gmail.com
+- **Discord**: kwandapchumba_45230
 
 ## License
 
